@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Bash 5.3+ | Kernel Backup and EFI Sync Hooks
+# Bash 5.3+ | V2 OverlayFS & Snapper Sync Setup
 set -Eeuo pipefail
 export LC_ALL=C
-trap 'echo -e "\n\033[1;31m[FATAL]\033[0m Script failed at line $LINENO. Command: $BASH_COMMAND" >&2' ERR
+trap 'printf "\n\033[1;31m[FATAL]\033[0m Script failed at line %d. Command: %s\n" "$LINENO" "$BASH_COMMAND" >&2; trap - ERR' ERR
 
 AUTO_MODE=false
 [[ "${1:-}" == "--auto" ]] && AUTO_MODE=true
@@ -19,57 +19,98 @@ execute() {
         "$@"
     else
         printf '\n\033[1;34m[ACTION]\033[0m %s\n' "$desc"
-        read -rp "Execute this step? [Y/n] " response || { echo -e "\nInput closed; aborting." >&2; exit 1; }
+        read -rp "Execute this step? [Y/n] " response || { printf '\nInput closed; aborting.\n' >&2; exit 1; }
         if [[ "${response,,}" =~ ^(n|no)$ ]]; then echo "Skipped."; return 0; fi
         "$@"
     fi
 }
 
-execute "Create Pacman hook directory" sudo mkdir -p /etc/pacman.d/hooks
+configure_mkinitcpio() {
+    local conf_file="/etc/mkinitcpio.conf"
+    
+    [[ -f "$conf_file" ]] || { echo "FATAL: $conf_file not found." >&2; return 1; }
 
-create_kernel_hook() {
-    # Uses a robust staging and pair-rollback mechanism to prevent mismatched kernels
-    cat << 'EOF' | sudo tee /etc/pacman.d/hooks/50-kernel-backup.hook >/dev/null
-[Trigger]
-Type = Package
-Operation = Install
-Operation = Upgrade
-Target = linux
-Target = *-ucode
-
-[Action]
-Description = Backing up matched kernel/initramfs/microcode...
-When = PreTransaction
-Exec = /usr/bin/bash -c 'set -Eeuo pipefail; shopt -s nullglob; files=(/boot/vmlinuz-linux /boot/initramfs-linux.img /boot/*-ucode.img); [[ -f /boot/vmlinuz-linux && -f /boot/initramfs-linux.img ]] || exit 0; for f in "${files[@]}"; do cp "$f" "$f.tmp"; done; sync; for f in "${files[@]}"; do [[ -f "${f%/*}/${f##*/}-previous" ]] && cp "${f%/*}/${f##*/}-previous" "${f%/*}/${f##*/}-previous.bak"; done; has_err=0; for f in "${files[@]}"; do if ! mv "$f.tmp" "${f%/*}/${f##*/}-previous"; then has_err=1; break; fi; done; if (( has_err )); then echo "FATAL: Partial rename failure. Rolling back." >&2; for f in "${files[@]}"; do [[ -f "${f%/*}/${f##*/}-previous.bak" ]] && mv "${f%/*}/${f##*/}-previous.bak" "${f%/*}/${f##*/}-previous" 2>/dev/null || true; done; rm -f /boot/*.tmp /boot/*.bak; exit 1; fi; rm -f /boot/*.bak; sync; echo "Matched Kernel/Microcode backup complete."'
-EOF
-}
-execute "Deploy safe, atomic-staged Kernel backup hook" create_kernel_hook
-
-create_limine_hook() {
-    cat << 'EOF' | sudo tee /etc/pacman.d/hooks/limine-update.hook >/dev/null
-[Trigger]
-Type = Package
-Operation = Install
-Operation = Upgrade
-Target = limine
-
-[Action]
-Description = Deploying updated Limine EFI binary to ESP...
-When = PostTransaction
-Depends = limine
-Exec = /usr/bin/bash -c 'cp /usr/share/limine/BOOTX64.EFI /boot/EFI/BOOT/BOOTX64.EFI.tmp && sync && mv /boot/EFI/BOOT/BOOTX64.EFI.tmp /boot/EFI/BOOT/BOOTX64.EFI && sync || { rm -f /boot/EFI/BOOT/BOOTX64.EFI.tmp; echo "FATAL: Limine EFI update failed." >&2; }'
-EOF
-}
-execute "Deploy Limine update sync hook" create_limine_hook
-
-enable_sync() {
-    local unit=""
-    if systemctl list-unit-files 'limine-snapper-sync.path' --no-legend | grep -q .; then
-        unit="limine-snapper-sync.path"
-    elif systemctl list-unit-files 'limine-snapper-sync.service' --no-legend | grep -q .; then
-        unit="limine-snapper-sync.service"
+    local active_hooks
+    active_hooks=$(grep -E '^\s*HOOKS\s*=' "$conf_file" | tail -n1 || true)
+    
+    local target_hook="btrfs-overlayfs"
+    local wrong_hook="sd-btrfs-overlayfs"
+    
+    if echo "$active_hooks" | grep -qE '\bsystemd\b'; then
+        target_hook="sd-btrfs-overlayfs"
+        wrong_hook="btrfs-overlayfs"
+        echo "INFO: Detected 'systemd' in hooks. Using $target_hook."
     fi
-    [[ -n "$unit" ]] || { echo "FATAL: limine-snapper-sync unit not found." >&2; return 1; }
-    sudo systemctl enable --now "$unit"
+
+    if echo "$active_hooks" | grep -qE "\b${target_hook}\b"; then
+        echo "INFO: $target_hook is already correctly configured."
+        return 0
+    fi
+
+    sudo sed -i -E "s/\b${wrong_hook}\b\s*//g" "$conf_file"
+
+    if ! echo "$active_hooks" | grep -qE '\bfilesystems\b'; then
+        echo "FATAL: 'filesystems' hook missing. Cannot inject overlayfs." >&2; return 1
+    fi
+
+    sudo sed -i -E "s/\b(filesystems)\b/\1 ${target_hook}/" "$conf_file"
+    echo "Successfully injected $target_hook into $conf_file"
 }
-execute "Enable the limine-snapper-sync daemon" enable_sync
+execute "Dynamically inject correct OverlayFS hook into mkinitcpio.conf" configure_mkinitcpio
+
+rebuild_initramfs() {
+    # Using native limine-update wrapper instead of mkinitcpio directly
+    sudo limine-update
+}
+execute "Rebuild Linux initramfs via limine-update wrapper" rebuild_initramfs
+
+configure_sync_daemon() {
+    local conf_file="/etc/limine-snapper-sync.conf"
+    
+    [[ -f "$conf_file" ]] || { echo "FATAL: $conf_file not found." >&2; return 1; }
+
+    local root_subvol
+    root_subvol=$(findmnt -fno OPTIONS / | grep -oP 'subvol=/?\K[^,]+' || echo "@")
+    local snapshots_subvol="@snapshots"
+
+    if grep -q "^ROOT_SUBVOLUME_PATH=" "$conf_file"; then
+        sudo sed -i "s|^ROOT_SUBVOLUME_PATH=.*|ROOT_SUBVOLUME_PATH=\"/${root_subvol}\"|" "$conf_file"
+    else
+        echo "ROOT_SUBVOLUME_PATH=\"/${root_subvol}\"" | sudo tee -a "$conf_file" >/dev/null
+    fi
+
+    if grep -q "^ROOT_SNAPSHOTS_PATH=" "$conf_file"; then
+        sudo sed -i "s|^ROOT_SNAPSHOTS_PATH=.*|ROOT_SNAPSHOTS_PATH=\"/${snapshots_subvol}\"|" "$conf_file"
+    else
+        echo "ROOT_SNAPSHOTS_PATH=\"/${snapshots_subvol}\"" | sudo tee -a "$conf_file" >/dev/null
+    fi
+    
+    echo "Sync daemon paths configured to /${root_subvol} and /${snapshots_subvol}"
+}
+execute "Configure limine-snapper-sync paths for top-level subvolumes" configure_sync_daemon
+
+configure_snap_pac() {
+    if [[ -f /etc/snap-pac.ini ]] && sed -n '/^\[home\]/,/^\[/p' /etc/snap-pac.ini | grep -q '.'; then
+        if sed -n '/^\[home\]/,/^\[/p' /etc/snap-pac.ini | grep -q '^\s*snapshot\s*='; then
+            sudo sed -i '/^\[home\]/,/^\[/{s/^\s*snapshot\s*=.*/snapshot = no/}' /etc/snap-pac.ini
+        else
+            sudo sed -i '/^\[home\]/a snapshot = no' /etc/snap-pac.ini
+        fi
+    else
+        printf '\n[home]\nsnapshot = no\n' | sudo tee -a /etc/snap-pac.ini >/dev/null
+    fi
+}
+execute "Configure snap-pac to ignore /home" configure_snap_pac
+
+enable_services_and_sync() {
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now snapper-cleanup.timer
+    sudo systemctl enable --now limine-snapper-sync.service
+    
+    # Take baseline to seed database
+    sudo snapper -c root create -c important -d "Baseline V2 Architecture" || true
+    
+    echo "Forcing final boot menu sync..."
+    sudo limine-snapper-sync
+}
+execute "Enable timers, take baseline snapshot, and populate boot menu" enable_services_and_sync
