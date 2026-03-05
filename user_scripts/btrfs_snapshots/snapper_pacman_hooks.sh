@@ -293,8 +293,7 @@ verify_previous_setup() {
 }
 
 choose_overlay_hook() {
-    get_effective_hooks
-
+    # FIX: Removed `get_effective_hooks` from here. It is now called in the parent scope.
     local hook
     for hook in "${EFFECTIVE_HOOKS[@]}"; do
         if [[ "$hook" == "systemd" ]]; then
@@ -319,6 +318,8 @@ configure_mkinitcpio_overlay_hook() {
     local -a final_hooks=()
     local tmp
 
+    # FIX: Call `get_effective_hooks` in the parent shell so the array persists.
+    get_effective_hooks
     target_hook="$(choose_overlay_hook)"
     verify_overlay_hook_available "$target_hook"
 
