@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Bash 5.3+ | V2 Snapper Subvolume Isolation
+# Bash 5.3+ | Arch Linux | Root Snapper isolation for bootable Btrfs snapshots
 set -Eeuo pipefail
 export LC_ALL=C
-trap 'printf "\n\033[1;31m[FATAL]\033[0m Script failed at line %d. Command: %s\n" "$LINENO" "$BASH_COMMAND" >&2; trap - ERR' ERR
+umask 022
+
+trap 'rc=$?; printf "\n\033[1;31m[FATAL]\033[0m Script failed at line %d. Command: %s\n" "$LINENO" "$BASH_COMMAND" >&2; exit "$rc"' ERR
 
 AUTO_MODE=false
 [[ "${1:-}" == "--auto" ]] && AUTO_MODE=true
 
-sudo -v || exit 1
-( while true; do sudo -n -v 2>/dev/null; sleep 240; done ) &
-SUDO_PID=$!
-trap 'kill $SUDO_PID 2>/dev/null || true' EXIT
+fatal() { printf 'FATAL: %s\n' "$*" >&2; exit 1; }
+info() { printf '\033[1;32m[INFO]\033[0m %s\n' "$*"; }
 
 execute() {
     local desc="$1"
@@ -19,91 +19,132 @@ execute() {
         "$@"
     else
         printf '\n\033[1;34m[ACTION]\033[0m %s\n' "$desc"
-        read -rp "Execute this step? [Y/n] " response || { printf '\nInput closed; aborting.\n' >&2; exit 1; }
-        if [[ "${response,,}" =~ ^(n|no)$ ]]; then echo "Skipped."; return 0; fi
+        read -rp "Execute this step? [Y/n] " response || fatal "Input closed."
+        if [[ "${response,,}" =~ ^(n|no)$ ]]; then printf 'Skipped.\n'; return 0; fi
         "$@"
     fi
 }
 
-unmount_snapshots() {
+sudo -v || fatal "Cannot obtain sudo privileges."
+( while true; do sudo -n -v 2>/dev/null; sleep 240; done ) &
+SUDO_PID=$!
+trap 'kill "$SUDO_PID" 2>/dev/null || true' EXIT
+
+[[ "$(stat -f -c %T /)" == "btrfs" ]] || fatal "Root filesystem is not Btrfs."
+
+get_root_source() {
+    local source
+    source="$(findmnt -no SOURCE /)"
+    printf '%s\n' "${source%%\[*}"
+}
+
+get_root_fs_uuid() {
+    local uuid source
+    uuid="$(findmnt -no UUID /)"
+    if [[ -n "$uuid" ]]; then printf '%s\n' "$uuid"; return 0; fi
+    source="$(get_root_source)"
+    uuid="$(sudo blkid -s UUID -o value "$source")"
+    [[ -n "$uuid" ]] || fatal "Could not determine Btrfs filesystem UUID."
+    printf '%s\n' "$uuid"
+}
+
+sanitize_snapshot_mount_options() {
+    local options="$1"
+    local -a out=()
+    IFS=',' read -r -a parts <<< "$options"
+    for part in "${parts[@]}"; do
+        case "$part" in
+            ""|subvol=*|subvolid=*) continue ;;
+            *) out+=("$part") ;;
+        esac
+    done
+    local IFS=','
+    printf '%s\n' "${out[*]}"
+}
+
+ensure_root_snapper_config() {
+    if ! sudo snapper -c root get-config >/dev/null 2>&1; then
+        sudo snapper -c root create-config /
+    fi
+    info "Root Snapper config is present."
+}
+
+ensure_top_level_snapshots_subvolume() {
+    local root_source tmp_mount
+    root_source="$(get_root_source)"
+    tmp_mount="$(mktemp -d)"
+    sudo mount -o subvolid=5 "$root_source" "$tmp_mount"
+    if ! sudo btrfs subvolume show "$tmp_mount/@snapshots" >/dev/null 2>&1; then
+        sudo btrfs subvolume create "$tmp_mount/@snapshots"
+    fi
+    sudo umount "$tmp_mount"
+    rmdir "$tmp_mount"
+    info "Top-level @snapshots subvolume is present."
+}
+
+remove_nested_snapshots_path() {
+    local -a child_ids=()
     sudo umount /.snapshots 2>/dev/null || true
-    sudo umount /home/.snapshots 2>/dev/null || true
-    sudo rmdir /.snapshots /home/.snapshots 2>/dev/null || true
-}
-execute "Unmount existing snapshot directories" unmount_snapshots
-
-create_configs() {
-    sudo snapper -c root get-config &>/dev/null || sudo snapper -c root create-config /
-    sudo snapper -c home get-config &>/dev/null || sudo snapper -c home create-config /home
-}
-execute "Generate default Snapper configs" create_configs
-
-isolate_subvolumes() {
-    if ! grep -qE '^\s*[^#].*\s+/.snapshots\s+' /etc/fstab; then
-        if [[ "$AUTO_MODE" == true ]]; then
-            echo "FATAL: Missing /.snapshots entry in /etc/fstab." >&2; return 1
-        fi
-        
-        echo -e "\n\033[1;33m[ACTION REQUIRED]\033[0m Missing /.snapshots entry in /etc/fstab!"
-        echo "  1. Open a new terminal: sudo nano /etc/fstab"
-        echo "  2. Copy your root (/) line twice."
-        echo "  3. Change the new mount points to /.snapshots and /home/.snapshots"
-        echo "  4. Change their subvol options to subvol=/@snapshots and subvol=/@home_snapshots"
-        read -rp "Press [Enter] once updated..." || true
-        
-        if ! grep -qE '^\s*[^#].*\s+/.snapshots\s+' /etc/fstab; then
-            echo "FATAL: Still no fstab entry found." >&2; return 1
-        fi
-        sudo systemctl daemon-reload
+    if sudo btrfs subvolume show /.snapshots >/dev/null 2>&1; then
+        mapfile -t child_ids < <(sudo btrfs subvolume list -o /.snapshots | awk '/^ID / {print $2}' | sort -rn)
+        for id in "${child_ids[@]}"; do
+            sudo btrfs subvolume delete --subvolid "$id" / >/dev/null 2>&1 || true
+        done
+        sudo btrfs subvolume delete /.snapshots
+    elif [[ -d /.snapshots ]]; then
+        sudo rmdir /.snapshots 2>/dev/null || true
     fi
-
-    local root_dev
-    root_dev=$(findmnt -fno SOURCE / | sed 's/\[.*\]//')
-    local missing_snapshots=false
-    local missing_home_snapshots=false
-    
-    if ! sudo btrfs subvolume list / | grep -q ' path @snapshots$'; then missing_snapshots=true; fi
-    if ! sudo btrfs subvolume list / | grep -q ' path @home_snapshots$'; then missing_home_snapshots=true; fi
-    
-    if [[ "$missing_snapshots" == true || "$missing_home_snapshots" == true ]]; then
-        local tmp_mnt
-        tmp_mnt=$(mktemp -d)
-        sudo mount -o subvolid=5 "$root_dev" "$tmp_mnt" || { echo "FATAL: Mount failed." >&2; rmdir "$tmp_mnt"; return 1; }
-        
-        [[ "$missing_snapshots" == true ]] && sudo btrfs subvolume create "$tmp_mnt/@snapshots"
-        [[ "$missing_home_snapshots" == true ]] && sudo btrfs subvolume create "$tmp_mnt/@home_snapshots"
-        
-        sudo umount "$tmp_mnt"
-        rmdir "$tmp_mnt"
-        echo "Top-level subvolumes verified/created."
-    fi
-
-    for snap_dir in /.snapshots /home/.snapshots; do
-        if mountpoint -q "$snap_dir" 2>/dev/null; then continue; fi
-        if sudo btrfs subvolume show "$snap_dir" &>/dev/null; then
-            sudo btrfs subvolume list -o "$snap_dir" | awk '{print $2}' | sort -rn | while IFS= read -r id; do
-                [[ -n "$id" ]] && sudo btrfs subvolume delete --subvolid "$id" / 2>/dev/null || true
-            done
-            sudo btrfs subvolume delete "$snap_dir"
-        fi
-    done
-    
-    sudo mkdir -p /.snapshots /home/.snapshots
-    sudo mount /.snapshots
-    findmnt /home/.snapshots &>/dev/null || sudo mount /home/.snapshots 2>/dev/null || true
-    
-    if ! findmnt /.snapshots &>/dev/null; then echo "FATAL: Mount failed." >&2; return 1; fi
-    sudo chmod 750 /.snapshots
-    findmnt /home/.snapshots &>/dev/null && sudo chmod 750 /home/.snapshots || true
+    sudo install -d -m 0750 /.snapshots
 }
-execute "Destroy nested subvolumes and mount top-level @snapshots" isolate_subvolumes
 
-tune_snapper() {
-    for conf in root home; do
-        if sudo snapper -c "$conf" get-config &>/dev/null; then
-            sudo snapper -c "$conf" set-config TIMELINE_CREATE="no" NUMBER_LIMIT="10" NUMBER_LIMIT_IMPORTANT="5" SPACE_LIMIT="0.0" FREE_LIMIT="0.0"
-        fi
-    done
+write_root_snapshots_fstab_entry() {
+    local fs_uuid mount_opts entry tmp_file
+    fs_uuid="$(get_root_fs_uuid)"
+    mount_opts="$(sanitize_snapshot_mount_options "$(findmnt -no OPTIONS /)")"
+    
+    entry="UUID=${fs_uuid} /.snapshots btrfs "
+    [[ -n "$mount_opts" ]] && entry+="${mount_opts},"
+    entry+="subvol=/@snapshots 0 0"
+
+    tmp_file="$(mktemp)"
+    awk '
+        BEGIN { in_block=0 }
+        /^# BEGIN MANAGED ROOT SNAPSHOTS$/ { in_block=1; next }
+        /^# END MANAGED ROOT SNAPSHOTS$/   { in_block=0; next }
+        in_block { next }
+        $1 !~ /^#/ && $2 == "/.snapshots" { next }
+        { print }
+    ' /etc/fstab > "$tmp_file"
+
+    {
+        printf '\n# BEGIN MANAGED ROOT SNAPSHOTS\n'
+        printf '%s\n' "$entry"
+        printf '# END MANAGED ROOT SNAPSHOTS\n'
+    } >> "$tmp_file"
+
+    sudo install -m 0644 "$tmp_file" /etc/fstab
+    rm -f "$tmp_file"
+    sudo systemctl daemon-reload
+    info "Updated /etc/fstab for /.snapshots"
+}
+
+mount_and_verify_root_snapshots() {
+    sudo mount /.snapshots || fatal "Failed to mount /.snapshots."
+    findmnt /.snapshots >/dev/null 2>&1 || fatal "/.snapshots is not recognized as a mountpoint."
+    info "Successfully mounted top-level /.snapshots."
+}
+
+enforce_retention_limits() {
+    if sudo snapper -c root get-config >/dev/null 2>&1; then
+        sudo snapper -c root set-config TIMELINE_CREATE="no" NUMBER_LIMIT="10" NUMBER_LIMIT_IMPORTANT="5" SPACE_LIMIT="0.0" FREE_LIMIT="0.0"
+        info "Enforced count-based retention limits."
+    fi
     sudo btrfs quota disable / 2>/dev/null || true
 }
-execute "Enforce count-based retention limits" tune_snapper
+
+execute "Ensure root Snapper config exists" ensure_root_snapper_config
+execute "Ensure top-level @snapshots subvolume exists" ensure_top_level_snapshots_subvolume
+execute "Remove nested /.snapshots path" remove_nested_snapshots_path
+execute "Write managed /.snapshots entry to /etc/fstab" write_root_snapshots_fstab_entry
+execute "Mount and verify root snapshots" mount_and_verify_root_snapshots
+execute "Enforce Snapper retention limits" enforce_retention_limits

@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Bash 5.3+ | V2 OverlayFS & Snapper Sync Setup
+# Bash 5.3+ | Arch Linux | OverlayFS & Sync Setup
 set -Eeuo pipefail
 export LC_ALL=C
-trap 'printf "\n\033[1;31m[FATAL]\033[0m Script failed at line %d. Command: %s\n" "$LINENO" "$BASH_COMMAND" >&2; trap - ERR' ERR
+umask 022
+
+trap 'rc=$?; printf "\n\033[1;31m[FATAL]\033[0m Script failed at line %d. Command: %s\n" "$LINENO" "$BASH_COMMAND" >&2; exit "$rc"' ERR
 
 AUTO_MODE=false
 [[ "${1:-}" == "--auto" ]] && AUTO_MODE=true
 
-sudo -v || exit 1
-( while true; do sudo -n -v 2>/dev/null; sleep 240; done ) &
-SUDO_PID=$!
-trap 'kill $SUDO_PID 2>/dev/null || true' EXIT
+fatal() { printf 'FATAL: %s\n' "$*" >&2; exit 1; }
+info() { printf '\033[1;32m[INFO]\033[0m %s\n' "$*"; }
 
 execute() {
     local desc="$1"
@@ -19,98 +19,106 @@ execute() {
         "$@"
     else
         printf '\n\033[1;34m[ACTION]\033[0m %s\n' "$desc"
-        read -rp "Execute this step? [Y/n] " response || { printf '\nInput closed; aborting.\n' >&2; exit 1; }
-        if [[ "${response,,}" =~ ^(n|no)$ ]]; then echo "Skipped."; return 0; fi
+        read -rp "Execute this step? [Y/n] " response || fatal "Input closed."
+        if [[ "${response,,}" =~ ^(n|no)$ ]]; then printf 'Skipped.\n'; return 0; fi
         "$@"
     fi
 }
 
+sudo -v || fatal "Cannot obtain sudo privileges."
+( while true; do sudo -n -v 2>/dev/null; sleep 240; done ) &
+SUDO_PID=$!
+trap 'kill "$SUDO_PID" 2>/dev/null || true' EXIT
+
 configure_mkinitcpio() {
     local conf_file="/etc/mkinitcpio.conf"
+    local hook_str="btrfs-overlayfs"
     
-    [[ -f "$conf_file" ]] || { echo "FATAL: $conf_file not found." >&2; return 1; }
-
-    local active_hooks
-    active_hooks=$(grep -E '^\s*HOOKS\s*=' "$conf_file" | tail -n1 || true)
-    
-    local target_hook="btrfs-overlayfs"
-    local wrong_hook="sd-btrfs-overlayfs"
-    
-    if echo "$active_hooks" | grep -qE '\bsystemd\b'; then
-        target_hook="sd-btrfs-overlayfs"
-        wrong_hook="btrfs-overlayfs"
-        echo "INFO: Detected 'systemd' in hooks. Using $target_hook."
+    if grep -E '^\s*HOOKS\s*=.*systemd' "$conf_file" >/dev/null; then
+        hook_str="sd-btrfs-overlayfs"
     fi
 
-    if echo "$active_hooks" | grep -qE "\b${target_hook}\b"; then
-        echo "INFO: $target_hook is already correctly configured."
+    # Read the effective hooks array carefully
+    local current_hooks
+    current_hooks=$(bash -c 'source /etc/mkinitcpio.conf; echo "${HOOKS[*]}"')
+
+    if [[ " $current_hooks " == *" $hook_str "* ]]; then
+        info "OverlayFS hook ($hook_str) is already configured."
         return 0
     fi
 
-    sudo sed -i -E "s/\b${wrong_hook}\b\s*//g" "$conf_file"
-
-    if ! echo "$active_hooks" | grep -qE '\bfilesystems\b'; then
-        echo "FATAL: 'filesystems' hook missing. Cannot inject overlayfs." >&2; return 1
+    if [[ " $current_hooks " != *" filesystems "* ]]; then
+        fatal "'filesystems' hook missing. Cannot securely inject overlayfs."
     fi
 
-    sudo sed -i -E "s/\b(filesystems)\b/\1 ${target_hook}/" "$conf_file"
-    echo "Successfully injected $target_hook into $conf_file"
+    # Safely inject via drop-in file (Arch standard practice)
+    sudo mkdir -p /etc/mkinitcpio.conf.d
+    echo "HOOKS=(${current_hooks/filesystems/filesystems $hook_str})" | sudo tee /etc/mkinitcpio.conf.d/99-btrfs-overlay.conf >/dev/null
+    info "Injected $hook_str into mkinitcpio.conf.d/99-btrfs-overlay.conf"
 }
-execute "Dynamically inject correct OverlayFS hook into mkinitcpio.conf" configure_mkinitcpio
 
 rebuild_initramfs() {
-    # Using native limine-update wrapper instead of mkinitcpio directly
     sudo limine-update
+    info "Initramfs rebuilt and Limine updated."
 }
-execute "Rebuild Linux initramfs via limine-update wrapper" rebuild_initramfs
 
 configure_sync_daemon() {
     local conf_file="/etc/limine-snapper-sync.conf"
-    
-    [[ -f "$conf_file" ]] || { echo "FATAL: $conf_file not found." >&2; return 1; }
-
     local root_subvol
-    root_subvol=$(findmnt -fno OPTIONS / | grep -oP 'subvol=/?\K[^,]+' || echo "@")
-    local snapshots_subvol="@snapshots"
-
-    if grep -q "^ROOT_SUBVOLUME_PATH=" "$conf_file"; then
-        sudo sed -i "s|^ROOT_SUBVOLUME_PATH=.*|ROOT_SUBVOLUME_PATH=\"/${root_subvol}\"|" "$conf_file"
-    else
-        echo "ROOT_SUBVOLUME_PATH=\"/${root_subvol}\"" | sudo tee -a "$conf_file" >/dev/null
-    fi
-
-    if grep -q "^ROOT_SNAPSHOTS_PATH=" "$conf_file"; then
-        sudo sed -i "s|^ROOT_SNAPSHOTS_PATH=.*|ROOT_SNAPSHOTS_PATH=\"/${snapshots_subvol}\"|" "$conf_file"
-    else
-        echo "ROOT_SNAPSHOTS_PATH=\"/${snapshots_subvol}\"" | sudo tee -a "$conf_file" >/dev/null
-    fi
+    root_subvol=$(findmnt -fno OPTIONS / | awk -F'subvol=/?' '{print $2}' | cut -d, -f1 || echo "@")
     
-    echo "Sync daemon paths configured to /${root_subvol} and /${snapshots_subvol}"
+    if [[ -z "$root_subvol" ]]; then root_subvol="@"; fi
+
+    sudo sed -i -E "s|^#?ROOT_SUBVOLUME_PATH=.*|ROOT_SUBVOLUME_PATH=\"/${root_subvol}\"|" "$conf_file"
+    sudo sed -i -E "s|^#?ROOT_SNAPSHOTS_PATH=.*|ROOT_SNAPSHOTS_PATH=\"/@snapshots\"|" "$conf_file"
+    
+    info "Configured limine-snapper-sync paths (Root: /${root_subvol}, Snaps: /@snapshots)"
 }
-execute "Configure limine-snapper-sync paths for top-level subvolumes" configure_sync_daemon
 
 configure_snap_pac() {
-    if [[ -f /etc/snap-pac.ini ]] && sed -n '/^\[home\]/,/^\[/p' /etc/snap-pac.ini | grep -q '.'; then
-        if sed -n '/^\[home\]/,/^\[/p' /etc/snap-pac.ini | grep -q '^\s*snapshot\s*='; then
-            sudo sed -i '/^\[home\]/,/^\[/{s/^\s*snapshot\s*=.*/snapshot = no/}' /etc/snap-pac.ini
-        else
-            sudo sed -i '/^\[home\]/a snapshot = no' /etc/snap-pac.ini
-        fi
+    local ini_file="/etc/snap-pac.ini"
+    if [[ ! -f "$ini_file" ]]; then
+        printf '[home]\nsnapshot = no\n' | sudo tee "$ini_file" >/dev/null
+    elif ! grep -q '^\[home\]' "$ini_file"; then
+        printf '\n[home]\nsnapshot = no\n' | sudo tee -a "$ini_file" >/dev/null
     else
-        printf '\n[home]\nsnapshot = no\n' | sudo tee -a /etc/snap-pac.ini >/dev/null
+        sudo sed -i '/^\[home\]/,/^\[/{s/^[[:space:]]*snapshot[[:space:]]*=.*/snapshot = no/}' "$ini_file"
+    fi
+    info "Disabled snap-pac for /home to prevent user-data rollback loss."
+}
+
+prime_dummy_previous_kernel() {
+    local machine_id kernel_dir
+    machine_id=$(cat /etc/machine-id)
+    kernel_dir="/boot/${machine_id}/linux"
+
+    if [[ -d "$kernel_dir" ]]; then
+        if [[ -f "${kernel_dir}/vmlinuz-linux" && ! -f "${kernel_dir}/vmlinuz-linux-previous" ]]; then
+            sudo cp "${kernel_dir}/vmlinuz-linux" "${kernel_dir}/vmlinuz-linux-previous"
+            info "Primed dummy vmlinuz-linux-previous"
+        fi
+        if [[ -f "${kernel_dir}/initramfs-linux" && ! -f "${kernel_dir}/initramfs-linux-previous.img" ]]; then
+            sudo cp "${kernel_dir}/initramfs-linux" "${kernel_dir}/initramfs-linux-previous.img"
+            info "Primed dummy initramfs-linux-previous.img"
+        fi
     fi
 }
-execute "Configure snap-pac to ignore /home" configure_snap_pac
 
 enable_services_and_sync() {
     sudo systemctl daemon-reload
     sudo systemctl enable --now snapper-cleanup.timer
     sudo systemctl enable --now limine-snapper-sync.service
     
-    # Take baseline to seed database
-    sudo snapper -c root create -c important -d "Baseline V2 Architecture" || true
-    
-    echo "Forcing final boot menu sync..."
+    # Generate the dummy kernels so the orchestrator doesn't throw Wayland UI errors on first run
+    prime_dummy_previous_kernel
+
+    sudo snapper -c root create -c important -d "Baseline V2.1 Architecture" || true
     sudo limine-snapper-sync
+    info "Baseline snapshot created and boot menu synchronized."
 }
-execute "Enable timers, take baseline snapshot, and populate boot menu" enable_services_and_sync
+
+execute "Inject OverlayFS hook via drop-in" configure_mkinitcpio
+execute "Rebuild initramfs" rebuild_initramfs
+execute "Configure daemon subvolume paths" configure_sync_daemon
+execute "Protect /home in snap-pac" configure_snap_pac
+execute "Enable timers and take baseline" enable_services_and_sync
