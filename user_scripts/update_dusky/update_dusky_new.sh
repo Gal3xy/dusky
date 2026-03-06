@@ -1716,14 +1716,20 @@ init_sudo() {
     log INFO "Acquiring sudo privileges for execution sequence..."
     sudo -v || { log ERROR "Sudo auth failed."; exit 1; }
 
-    ( trap 'exit 0' TERM
-      while kill -0 "$MAIN_PID" 2>/dev/null; do
-          sleep "$SUDO_KEEPALIVE_INTERVAL"
-          sudo -n true 2>/dev/null || exit 0
-      done
+    (
+        if [[ -n "${LOCK_FD:-}" ]]; then
+            exec {LOCK_FD}>&- 2>/dev/null || true
+        fi
+
+        trap 'exit 0' TERM
+
+        while kill -0 "$MAIN_PID" 2>/dev/null; do
+            sleep "$SUDO_KEEPALIVE_INTERVAL" &
+            wait $! 2>/dev/null || true
+            sudo -n true 2>/dev/null || exit 0
+        done
     ) &
     SUDO_PID=$!
-    disown "$SUDO_PID" 2>/dev/null || true
 }
 
 stop_sudo() {
