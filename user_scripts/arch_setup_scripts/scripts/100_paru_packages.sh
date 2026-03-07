@@ -53,7 +53,6 @@ readonly PACKAGES=(
   "adwaita-qt6"
   "adwaita-qt5"
   "otf-atkinson-hyperlegible-next"
-  "fluent-icon-theme-git"
   "python-pywalfox"
   "python-pyquery"
   "hyprshade"
@@ -63,6 +62,8 @@ readonly PACKAGES=(
   "tray-tui"
   "wifitui-bin"
   "xdg-terminal-exec"
+  "papirus-icon-theme-git"
+# "fluent-icon-theme-git"
 )
 
 # 5 Seconds wait time before auto-retrying
