@@ -14,7 +14,8 @@ shopt -s nullglob inherit_errexit
 #  Add absolute paths to binaries you want to process automatically.
 # ==============================================================================
 declare -ar DEFAULT_BINARIES=(
-    # "/usr/bin/powertop"
+
+#    "/usr/bin/powertop"
     "/usr/bin/papirus-folders"
 )
 

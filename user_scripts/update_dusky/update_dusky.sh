@@ -102,6 +102,8 @@ declare -ra UPDATE_SEQUENCE=(
 #================= CUSTOM=====================
     "U | dusky_commands_before.sh"
     "U | rofi_wallpaper_selctor.sh --cache-only --progress"
+    "S | pacman_packages.sh"
+    "U | paru_packages.sh"
 #================= Scripts =====================
 
     "U | 005_hypr_custom_config_setup.sh"
@@ -206,8 +208,6 @@ declare -ra UPDATE_SEQUENCE=(
 
     "U | copy_service_files.sh --default"
     "U | update_checker.sh --num"
-    "S | pacman_packages.sh"
-    "U | paru_packages.sh"
     "U | cc_restart.sh --quiet"
     "S | dusky_service_manager.sh"
     "U | append_defaults_keybinds_edit_here.sh"
