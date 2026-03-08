@@ -1185,13 +1185,71 @@ get_repo_state() {
     fi
 
     lock_state="$(detect_git_lock_state)"
-    if [[ "$lock_state" != "none" ]]; then
-        log ERROR "Git lock detected: ${DOTFILES_GIT_DIR}/${lock_state}"
-        log ERROR "Another Git operation may still be active, or a previous one ended uncleanly."
-        log ERROR "Inspect the repository and remove the lock manually only after confirming it is stale."
-        REPLY="invalid"
-        return 0
-    fi
+    while [[ "$lock_state" != "none" ]]; do
+        local lock_file="${DOTFILES_GIT_DIR}/${lock_state}"
+        local lock_age=0
+        local current_time=0
+        local mtime=0
+        local prompt_ans=""
+        local can_auto_delete=false
+
+        log WARN "Git lock detected: $lock_file"
+        
+        # Calculate precise age of the lock file
+        current_time="$EPOCHSECONDS"
+        mtime="$(stat -c %Y -- "$lock_file" 2>/dev/null || printf '%s' "$current_time")"
+        (( lock_age = current_time - mtime )) || lock_age=0
+
+        # Heuristic: A git lock older than 60 seconds in a bare repo is almost certainly stale
+        if (( lock_age > 60 )); then
+            log INFO "Lock file is ${lock_age}s old (likely a stale remnant from a crash)."
+            can_auto_delete=true
+        fi
+
+        # Interactive user prompt
+        if [[ -t 0 && "$OPT_FORCE" != true ]]; then
+            printf '\n%s[GIT LOCK DETECTED]%s Another Git process may be running, or a previous update crashed.\n' "$CLR_YLW" "$CLR_RST"
+            read -r -t "$PROMPT_TIMEOUT_SHORT" -p "Do you want to clear the stale lock and continue? [y/N] " prompt_ans || prompt_ans="n"
+            
+            if [[ "$prompt_ans" =~ ^[Yy]$ ]]; then
+                can_auto_delete=true
+            else
+                log ERROR "User aborted lock removal."
+                REPLY="invalid"
+                return 0
+            fi
+        else
+            # Non-interactive (headless) safety checks
+            if [[ "$can_auto_delete" != true ]]; then
+                log ERROR "Lock file is too recent (${lock_age}s) to safely auto-remove in unattended mode."
+                log ERROR "A background process might be actively writing to the repository."
+                REPLY="invalid"
+                return 0
+            else
+                log INFO "Auto-removing stale lock file in unattended mode..."
+            fi
+        fi
+
+        # Atomic removal and verification
+        if [[ "$can_auto_delete" == true ]]; then
+            rm -f -- "$lock_file" 2>/dev/null || true
+            
+            local next_lock_state=""
+            next_lock_state="$(detect_git_lock_state)"
+            
+            if [[ "$next_lock_state" == "$lock_state" ]]; then
+                log ERROR "Failed to auto-remove lock file: $lock_file"
+                log ERROR "Check filesystem permissions or remove it manually."
+                REPLY="invalid"
+                return 0
+            fi
+            
+            lock_state="$next_lock_state"
+            if [[ "$lock_state" == "none" ]]; then
+                log OK "Stale lock successfully cleared."
+            fi
+        fi
+    done
 
     if ! "${GIT_CMD[@]}" rev-parse --git-dir >/dev/null 2>&1; then
         log ERROR "Repository metadata is invalid or corrupted: $DOTFILES_GIT_DIR"
