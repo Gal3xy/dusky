@@ -22,7 +22,7 @@ set -o pipefail
 
 declare -ra FLEET_COMMANDS=(
     # --- UI & Theming ---
-#    "U | gsettings set org.gnome.desktop.interface icon-theme 'Fluent-teal-dark'"
+#    "U | gsettings set org.gnome.desktop.interface icon-theme 'Papirus'"
 #    "U | gsettings set org.cinnamon.desktop.default-applications.terminal exec 'kitty'"
 
     # --- System Services ---

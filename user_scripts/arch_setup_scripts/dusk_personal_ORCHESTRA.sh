@@ -130,6 +130,7 @@ INSTALL_SEQUENCE=(
     "S | 465_sddm_setup.sh"
     "U | 470_vesktop_matugen.sh"
     "U | 475_reverting_sleep_timeout.sh"
+    "U | 480_dusky_commands.sh"
 
 # ------ CUSTOM PATH SCRIPTS -------
 
