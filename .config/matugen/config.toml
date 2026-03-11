@@ -137,6 +137,18 @@ post_hook   = '''
 bash -c '{ pkill -SIGUSR1 nvim; } >/dev/null 2>&1 </dev/null & disown'
 '''
 
+[templates.zed]
+input_path  = '~/.config/matugen/templates/zed-colors.json'
+output_path = '~/.config/matugen/generated/zed-theme.json'
+post_hook   = '''
+bash -c '
+{
+  mkdir -p "$HOME/.config/zed/themes"
+  ln -nfs "$HOME/.config/matugen/generated/zed-theme.json" "$HOME/.config/zed/themes/matugen.json"
+} >/dev/null 2>&1 </dev/null & disown
+'
+'''
+
 [templates.yazi]
 input_path  = '~/.config/matugen/templates/yazi-theme.toml'
 output_path = '~/.config/matugen/generated/yazi-theme.toml'
