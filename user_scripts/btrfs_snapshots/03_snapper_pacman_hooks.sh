@@ -129,19 +129,29 @@ get_effective_hooks() {
     for hook in "${EFFECTIVE_HOOKS[@]}"; do EFFECTIVE_HOOKS_SET["$hook"]=1; done
 }
 
-dep_satisfied() { ! pacman -T "$1" >/dev/null 2>&1; }
+dep_satisfied() {
+    local missing
+    missing="$(pacman -T "$1" 2>/dev/null || true)"
+    [[ -z "$missing" ]]
+}
 
 ensure_aur_build_prereqs() {
     local need_java=false dep provider
     for dep in 'java-runtime>=21' 'java-environment>=21'; do
-        if ! dep_satisfied "$dep"; then need_java=true; break; fi
+        if ! dep_satisfied "$dep"; then
+            need_java=true
+            break
+        fi
     done
     [[ "$need_java" == true ]] || return 0
 
-    for pkg in jdk-openjdk jdk21-openjdk; do
-        if pacman -Si "$pkg" >/dev/null 2>&1; then provider="$pkg"; break; fi
+    for pkg in jdk-openjdk jdk21-openjdk jdk25-openjdk; do
+        if pacman -Si "$pkg" >/dev/null 2>&1; then
+            provider="$pkg"
+            break
+        fi
     done
-    [[ -n "$provider" ]] || fatal "Java provider required."
+    [[ -n "${provider:-}" ]] || fatal "Java provider required."
     info "Installing $provider"
     sudo pacman -S --needed --noconfirm "$provider"
 }
@@ -151,19 +161,25 @@ install_aur_packages() {
     pacman -Q limine-snapper-sync >/dev/null 2>&1 && sync_in=true
     pacman -Q limine-mkinitcpio-hook >/dev/null 2>&1 && hook_in=true
 
+    local -a pkgs=()
+    [[ "$sync_in" == false ]] && pkgs+=(limine-snapper-sync)
+    if [[ "$hook_in" == false ]] && ! command -v limine-update >/dev/null 2>&1; then
+        pkgs+=(limine-mkinitcpio-hook)
+    fi
+
+    (( ${#pkgs[@]} == 0 )) && return 0
+
     if ! command -v paru >/dev/null 2>&1 && ! command -v yay >/dev/null 2>&1; then
-        if [[ "$sync_in" == true && ( "$hook_in" == true || -x /usr/bin/limine-update ) ]]; then return 0; fi
         fatal "No AUR helper found."
     fi
 
     ensure_aur_build_prereqs
-    local -a pkgs=()
-    [[ "$sync_in" == false ]] && pkgs+=(limine-snapper-sync)
-    [[ "$hook_in" == false ]] && ! command -v limine-update >/dev/null 2>&1 && pkgs+=(limine-mkinitcpio-hook)
 
-    (( ${#pkgs[@]} == 0 )) && return 0
-    if command -v paru >/dev/null 2>&1; then paru -S --needed --noconfirm --skipreview "${pkgs[@]}"
-    else yay -S --needed --noconfirm --answerdiff None --answerclean None --answeredit None "${pkgs[@]}"; fi
+    if command -v paru >/dev/null 2>&1; then
+        paru -S --needed --noconfirm --skipreview "${pkgs[@]}"
+    else
+        yay -S --needed --noconfirm --answerdiff None --answerclean None --answeredit None "${pkgs[@]}"
+    fi
 }
 
 install_snap_pac() { sudo pacman -S --needed --noconfirm snap-pac; }
@@ -182,17 +198,17 @@ verify_previous_setup() {
 configure_mkinitcpio_overlay_hook() {
     local target_hook managed_file tmp
     get_effective_hooks
-    
+
     target_hook="btrfs-overlayfs"
     [[ -v EFFECTIVE_HOOKS_SET["systemd"] ]] && target_hook="sd-btrfs-overlayfs"
-    
+
     [[ -f "/usr/lib/initcpio/install/${target_hook}" ]] || fatal "Hook ${target_hook} missing."
     [[ -v EFFECTIVE_HOOKS_SET["filesystems"] ]] || fatal "'filesystems' missing from HOOKS."
 
     managed_file="/etc/mkinitcpio.conf.d/zz-limine-overlayfs.conf"
     tmp="$(mktemp)"
     ACTIVE_TEMP_FILES+=("$tmp")
-    
+
     cat <<EOF > "$tmp"
 # Managed by limine + snapper integration setup
 if [[ " \${HOOKS[*]} " != *" ${target_hook} "* ]]; then
@@ -218,8 +234,7 @@ EOF
     backup_file "$managed_file"
     atomic_write "$managed_file" "$tmp"
     rm -f "$tmp"; ACTIVE_TEMP_FILES=("${ACTIVE_TEMP_FILES[@]/$tmp}")
-    
-    # FIXED: Added logging back
+
     info "Configured dynamic ${target_hook} injection in ${managed_file}"
 }
 
@@ -245,7 +260,6 @@ configure_sync_daemon() {
     if ! cmp -s "$tmp" "$conf_file"; then
         backup_file "$conf_file"
         atomic_write "$conf_file" "$tmp"
-        # FIXED: Added logging back
         info "Configured limine-snapper-sync paths."
     else
         info "limine-snapper-sync paths are already up to date."
@@ -257,7 +271,7 @@ configure_snap_pac() {
     local ini="/etc/snap-pac.ini" tmp
     sudo touch "$ini"
     tmp="$(mktemp)"; ACTIVE_TEMP_FILES+=("$tmp")
-    
+
     awk '
         BEGIN { sec = "" }
         /^[[:space:]]*\[.*\][[:space:]]*$/ {
@@ -273,11 +287,10 @@ configure_snap_pac() {
             if (!seen["home"]) { print "\n[home]\nsnapshot = yes" }
         }
     ' "$ini" > "$tmp"
-    
+
     if ! cmp -s "$tmp" "$ini"; then
         backup_file "$ini"
         atomic_write "$ini" "$tmp"
-        # FIXED: Added logging back
         info "Configured snap-pac for root and home."
     else
         info "snap-pac is already configured correctly."
@@ -293,12 +306,10 @@ create_post_config_baseline_snapshot() {
     local desc="Baseline after Limine + Snapper integration"
     if ! baseline_snapshot_exists "root" "$desc"; then
         sudo snapper -c root create -t single -c important -d "$desc"
-        # FIXED: Added logging back
         info "Created baseline root snapshot."
     fi
     if ! baseline_snapshot_exists "home" "$desc"; then
         sudo snapper -c home create -t single -c important -d "$desc"
-        # FIXED: Added logging back
         info "Created baseline home snapshot."
     fi
 }

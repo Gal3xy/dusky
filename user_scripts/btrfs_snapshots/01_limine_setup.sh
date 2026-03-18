@@ -72,11 +72,11 @@ atomic_write() {
     target_dir="$(dirname "$target")"
     tmp_target="$(sudo mktemp "${target_dir}/.tmp.XXXXXX")"
     ACTIVE_TEMP_FILES+=("$tmp_target")
-    
+
     sudo cp "$src" "$tmp_target"
     sudo chmod 0644 "$tmp_target"
     sudo mv "$tmp_target" "$target"
-    
+
     ACTIVE_TEMP_FILES=("${ACTIVE_TEMP_FILES[@]/$tmp_target}")
     sudo sync -f "$target_dir" 2>/dev/null || true
 }
@@ -84,11 +84,11 @@ atomic_write() {
 load_mount_info() {
     local target="$1"
     [[ -v CACHE_MNT_OPTS["$target"] ]] && return 0
-    
+
     local findmnt_out source uuid opts
     findmnt_out="$(findmnt -n -e -o SOURCE,UUID,OPTIONS -M "$target" 2>/dev/null || true)"
     [[ -n "$findmnt_out" ]] || fatal "Could not determine mount info for $target"
-    
+
     read -r source uuid opts <<< "$findmnt_out"
     CACHE_MNT_SOURCE["$target"]="${source%%\[*}"
     CACHE_MNT_UUID["$target"]="$uuid"
@@ -176,15 +176,26 @@ hook_present() { [[ -v EFFECTIVE_HOOKS_SET["$1"] ]]; }
 detect_esp_mountpoint() {
     [[ -n "$CACHE_ESP_PATH" ]] && { printf '%s\n' "$CACHE_ESP_PATH"; return 0; }
     if command -v bootctl >/dev/null 2>&1; then
-        local esp; esp="$(bootctl --print-esp-path 2>/dev/null || true)"
-        if [[ -n "$esp" && -d "$esp" ]]; then CACHE_ESP_PATH="$esp"; printf '%s\n' "$CACHE_ESP_PATH"; return 0; fi
+        local esp
+        esp="$(bootctl --print-esp-path 2>/dev/null || true)"
+        if [[ -n "$esp" && -d "$esp" ]]; then
+            CACHE_ESP_PATH="$esp"
+            printf '%s\n' "$CACHE_ESP_PATH"
+            return 0
+        fi
     fi
 
     local candidate fstype
     for candidate in /efi /boot /boot/efi; do
         if mountpoint -q "$candidate"; then
             fstype="$(findmnt -M "$candidate" -no FSTYPE 2>/dev/null || true)"
-            case "$fstype" in vfat|fat|msdos) CACHE_ESP_PATH="$candidate"; printf '%s\n' "$CACHE_ESP_PATH"; return 0 ;; esac
+            case "$fstype" in
+                vfat|fat|msdos)
+                    CACHE_ESP_PATH="$candidate"
+                    printf '%s\n' "$CACHE_ESP_PATH"
+                    return 0
+                    ;;
+            esac
         fi
     done
     return 1
@@ -201,7 +212,9 @@ get_mount_partuuid() {
 
 set_shell_var() {
     local file="$1" key="$2" value="$3" escaped_value
-    escaped_value="${value//\\/\\\\}"; escaped_value="${escaped_value//&/\\&}"; escaped_value="${escaped_value//|/\\|}"
+    escaped_value="${value//\\/\\\\}"
+    escaped_value="${escaped_value//&/\\&}"
+    escaped_value="${escaped_value//|/\\|}"
     sudo touch "$file"
     if sudo grep -qE "^[[:space:]]*${key}=" "$file"; then
         sudo sed -i -E "s|^[[:space:]]*${key}=.*|${key}=\"${escaped_value}\"|" "$file"
@@ -210,12 +223,19 @@ set_shell_var() {
     fi
 }
 
-dep_satisfied() { ! pacman -T "$1" >/dev/null 2>&1; }
+dep_satisfied() {
+    local missing
+    missing="$(pacman -T "$1" 2>/dev/null || true)"
+    [[ -z "$missing" ]]
+}
 
 choose_java_provider() {
     local pkg
-    for pkg in jdk-openjdk jdk21-openjdk; do
-        if pacman -Si "$pkg" >/dev/null 2>&1; then printf '%s\n' "$pkg"; return 0; fi
+    for pkg in jdk-openjdk jdk21-openjdk jdk25-openjdk; do
+        if pacman -Si "$pkg" >/dev/null 2>&1; then
+            printf '%s\n' "$pkg"
+            return 0
+        fi
     done
     return 1
 }
@@ -223,7 +243,10 @@ choose_java_provider() {
 ensure_aur_build_prereqs() {
     local need_java=false dep provider
     for dep in 'java-runtime>=21' 'java-environment>=21'; do
-        if ! dep_satisfied "$dep"; then need_java=true; break; fi
+        if ! dep_satisfied "$dep"; then
+            need_java=true
+            break
+        fi
     done
     [[ "$need_java" == true ]] || return 0
     provider="$(choose_java_provider)" || fatal "A Java provider for java-environment>=21 is required."
@@ -234,7 +257,8 @@ ensure_aur_build_prereqs() {
 install_kernel_headers_if_needed() {
     local has_dkms=false moddir pkgbase headers_pkg shopt_save
     pacman -Q dkms >/dev/null 2>&1 && has_dkms=true
-    shopt_save=$(shopt -p nullglob || true); shopt -s nullglob
+    shopt_save=$(shopt -p nullglob || true)
+    shopt -s nullglob
     local dkms_dirs=(/var/lib/dkms/*)
     ((${#dkms_dirs[@]} > 0)) && has_dkms=true
     eval "$shopt_save"
@@ -257,19 +281,122 @@ install_repo_packages() {
     install_kernel_headers_if_needed
 }
 
+load_efibootmgr_cache() {
+    [[ -z "$CACHE_EFIBOOTMGR_OUTPUT" ]] && CACHE_EFIBOOTMGR_OUTPUT="$(sudo efibootmgr -v 2>/dev/null || true)"
+}
+
+get_boot_entries_for_loader_on_esp() {
+    local loader_path="$1" esp_partuuid="${2:-}" line entry_code line_lc loader_lc partuuid_lc
+    loader_lc="${loader_path,,}"
+    partuuid_lc="${esp_partuuid,,}"
+    load_efibootmgr_cache
+
+    while IFS= read -r line; do
+        [[ "$line" =~ ^Boot([0-9A-Fa-f]{4})\*?[[:space:]] ]] || continue
+        entry_code="${BASH_REMATCH[1]^^}"
+        line_lc="${line,,}"
+        [[ -n "$partuuid_lc" && "$line_lc" != *"gpt,${partuuid_lc},"* ]] && continue
+        [[ "$line_lc" == *"$loader_lc"* ]] && printf '%s\n' "$entry_code"
+    done <<< "$CACHE_EFIBOOTMGR_OUTPUT"
+}
+
+has_loader_entry_on_esp() {
+    local -a entries=()
+    mapfile -t entries < <(get_boot_entries_for_loader_on_esp "$1" "${2:-}")
+    ((${#entries[@]} > 0))
+}
+
+get_named_limine_fallback_entries_on_esp() {
+    local esp_partuuid="${1:-}" line entry_code line_lc partuuid_lc fallback_loader
+    fallback_loader='\efi\boot\bootx64.efi'
+    partuuid_lc="${esp_partuuid,,}"
+    load_efibootmgr_cache
+
+    while IFS= read -r line; do
+        [[ "$line" =~ ^Boot([0-9A-Fa-f]{4})\*?[[:space:]] ]] || continue
+        entry_code="${BASH_REMATCH[1]^^}"
+        line_lc="${line,,}"
+        [[ -n "$partuuid_lc" && "$line_lc" != *"gpt,${partuuid_lc},"* ]] && continue
+        [[ "$line_lc" == *"$fallback_loader"* ]] || continue
+        [[ "$line_lc" == *"limine"* ]] || continue
+        printf '%s\n' "$entry_code"
+    done <<< "$CACHE_EFIBOOTMGR_OUTPUT"
+}
+
+has_named_limine_fallback_entry_on_esp() {
+    local -a entries=()
+    mapfile -t entries < <(get_named_limine_fallback_entries_on_esp "${1:-}")
+    ((${#entries[@]} > 0))
+}
+
+delete_boot_entries() {
+    local entry deleted=false
+    for entry in "$@"; do
+        [[ -n "$entry" ]] || continue
+        sudo efibootmgr -b "$entry" -B >/dev/null 2>&1 || true
+        deleted=true
+    done
+    [[ "$deleted" == true ]] && CACHE_EFIBOOTMGR_OUTPUT=""
+}
+
+rename_named_limine_fallback_entries() {
+    local esp_partuuid="${1:-}" entry renamed=false
+    local -a entries=()
+    mapfile -t entries < <(get_named_limine_fallback_entries_on_esp "$esp_partuuid")
+    ((${#entries[@]} == 0)) && return 0
+
+    warn "Renaming existing Limine fallback NVRAM entries to avoid duplicate-label warnings."
+    for entry in "${entries[@]}"; do
+        sudo efibootmgr -b "$entry" -L 'Limine (fallback)' >/dev/null 2>&1 || true
+        renamed=true
+    done
+    [[ "$renamed" == true ]] && CACHE_EFIBOOTMGR_OUTPUT=""
+}
+
+dedupe_limine_entries() {
+    local esp_partuuid="${1:-}" keep
+    local -a canonical_entries=() fallback_entries=()
+
+    mapfile -t canonical_entries < <(get_boot_entries_for_loader_on_esp '\EFI\limine\limine_x64.efi' "$esp_partuuid")
+    if ((${#canonical_entries[@]} > 1)); then
+        keep="${canonical_entries[0]}"
+        warn "Multiple canonical Limine NVRAM entries found. Keeping Boot${keep} and deleting extras."
+        delete_boot_entries "${canonical_entries[@]:1}"
+    fi
+
+    mapfile -t fallback_entries < <(get_named_limine_fallback_entries_on_esp "$esp_partuuid")
+    if ((${#fallback_entries[@]} > 1)); then
+        keep="${fallback_entries[0]}"
+        warn "Multiple Limine fallback NVRAM entries found. Keeping Boot${keep} and deleting extras."
+        delete_boot_entries "${fallback_entries[@]:1}"
+    fi
+}
+
+prepare_limine_nvram_for_install() {
+    local esp_target esp_partuuid
+    esp_target="$(detect_esp_mountpoint 2>/dev/null || true)"
+    [[ -n "$esp_target" ]] || return 0
+    esp_partuuid="$(get_mount_partuuid "$esp_target" || true)"
+    rename_named_limine_fallback_entries "$esp_partuuid"
+}
+
 install_aur_packages() {
     pacman -Q limine-mkinitcpio-hook >/dev/null 2>&1 && return 0
     if ! command -v paru >/dev/null 2>&1 && ! command -v yay >/dev/null 2>&1; then
         fatal "No supported AUR helper found."
     fi
+
     ensure_aur_build_prereqs
+    prepare_limine_nvram_for_install
 
     if command -v paru >/dev/null 2>&1; then
         paru -S --needed --noconfirm --skipreview limine-mkinitcpio-hook
     else
         yay -S --needed --noconfirm --answerdiff None --answerclean None --answeredit None limine-mkinitcpio-hook
     fi
-    NEEDS_LIMINE_UPDATE=true
+
+    CACHE_EFIBOOTMGR_OUTPUT=""
+    NEEDS_LIMINE_UPDATE=false
 }
 
 get_crypt_ancestor() {
@@ -300,7 +427,7 @@ configure_cmdline() {
 
     root_subvol="$(get_root_subvolume_path || true)"
     rootflags="$(build_btrfs_rootflags "$mount_opts" "$root_subvol")"
-    
+
     root_mode="rw"
     [[ ",${mount_opts}," == *",ro,"* ]] && root_mode="ro"
 
@@ -341,10 +468,13 @@ configure_cmdline() {
 
     if ! hook_present microcode; then
         local shopt_save
-        shopt_save=$(shopt -p nullglob || true); shopt -s nullglob
+        shopt_save=$(shopt -p nullglob || true)
+        shopt -s nullglob
         ucode_imgs=(/boot/*-ucode.img)
         eval "$shopt_save"
-        for img in "${ucode_imgs[@]}"; do cmdline_parts+=("initrd=/$(basename "$img")"); done
+        for img in "${ucode_imgs[@]}"; do
+            cmdline_parts+=("initrd=/$(basename "$img")")
+        done
     fi
 
     [[ -n "${EXTRA_KERNEL_CMDLINE:-}" ]] && cmdline_parts+=("${EXTRA_KERNEL_CMDLINE}")
@@ -360,7 +490,8 @@ configure_cmdline() {
         info "Updated /etc/kernel/cmdline"
         NEEDS_LIMINE_UPDATE=true
     fi
-    rm -f "$tmp"; ACTIVE_TEMP_FILES=("${ACTIVE_TEMP_FILES[@]/$tmp}")
+    rm -f "$tmp"
+    ACTIVE_TEMP_FILES=("${ACTIVE_TEMP_FILES[@]/$tmp}")
 }
 
 configure_limine_defaults() {
@@ -371,7 +502,7 @@ configure_limine_defaults() {
     else
         sudo touch "$limine_defaults"
     fi
-    
+
     esp_target="$(detect_esp_mountpoint)" || fatal "Could not detect a mounted ESP."
     current_esp="$(grep -E '^[[:space:]]*ESP_PATH=' "$limine_defaults" 2>/dev/null | cut -d= -f2 | tr -d '"' || true)"
 
@@ -383,47 +514,18 @@ configure_limine_defaults() {
     fi
 }
 
-load_efibootmgr_cache() {
-    [[ -z "$CACHE_EFIBOOTMGR_OUTPUT" ]] && CACHE_EFIBOOTMGR_OUTPUT="$(sudo efibootmgr -v 2>/dev/null || true)"
-}
-
-get_boot_entries_for_loader_on_esp() {
-    local loader_path="$1" esp_partuuid="${2:-}" line entry_code line_lc loader_lc partuuid_lc
-    loader_lc="${loader_path,,}"; partuuid_lc="${esp_partuuid,,}"
-    load_efibootmgr_cache
-
-    while IFS= read -r line; do
-        [[ "$line" =~ ^Boot([0-9A-Fa-f]{4})\*?[[:space:]] ]] || continue
-        entry_code="${BASH_REMATCH[1]^^}"
-        line_lc="${line,,}"
-        [[ -n "$partuuid_lc" && "$line_lc" != *"gpt,${partuuid_lc},"* ]] && continue
-        [[ "$line_lc" == *"$loader_lc"* ]] && printf '%s\n' "$entry_code"
-    done <<< "$CACHE_EFIBOOTMGR_OUTPUT"
-}
-
-has_loader_entry_on_esp() {
-    local -a entries=()
-    mapfile -t entries < <(get_boot_entries_for_loader_on_esp "$1" "${2:-}")
-    ((${#entries[@]} > 0))
-}
-
-dedupe_named_limine_entries() {
-    local esp_partuuid="${1:-}" keep entry
-    local -a entries=()
-    mapfile -t entries < <(get_boot_entries_for_loader_on_esp '\EFI\limine\limine_x64.efi' "$esp_partuuid")
-    ((${#entries[@]} > 1)) || return 0
-
-    keep="${entries[0]}"
-    warn "Multiple NVRAM entries found. Keeping Boot${keep} and deleting extras."
-    for entry in "${entries[@]:1}"; do sudo efibootmgr -b "$entry" -B >/dev/null 2>&1 || true; done
-}
-
 deploy_limine() {
-    local esp_target esp_partuuid
+    local esp_target esp_partuuid canonical_present=false
+
     esp_target="$(detect_esp_mountpoint)" || fatal "Could not detect ESP mount."
     esp_partuuid="$(get_mount_partuuid "$esp_target" || true)"
 
-    if [[ ! -f "${esp_target}/EFI/limine/limine_x64.efi" ]] || ! has_loader_entry_on_esp '\EFI\limine\limine_x64.efi' "$esp_partuuid"; then
+    if has_loader_entry_on_esp '\EFI\limine\limine_x64.efi' "$esp_partuuid"; then
+        canonical_present=true
+    fi
+
+    if [[ ! -f "${esp_target}/EFI/limine/limine_x64.efi" || "$canonical_present" == false ]]; then
+        rename_named_limine_fallback_entries "$esp_partuuid"
         info "Installing Limine EFI entry."
         sudo limine-install
         CACHE_EFIBOOTMGR_OUTPUT=""
@@ -435,14 +537,25 @@ deploy_limine() {
         sudo limine-update
     fi
 
-    dedupe_named_limine_entries "$esp_partuuid"
+    rename_named_limine_fallback_entries "$esp_partuuid"
+    dedupe_limine_entries "$esp_partuuid"
+
     [[ -f /boot/limine.conf ]] || fatal "/boot/limine.conf was not created."
     info "Limine deployment completed."
 }
 
 preflight_checks() {
     (( EUID != 0 )) || fatal "Run as regular user with sudo privileges."
-    require_cmd sudo; require_cmd pacman; require_cmd findmnt; require_cmd blkid; require_cmd lsblk; require_cmd awk; require_cmd sed; require_cmd grep; require_cmd cmp; require_cmd mktemp
+    require_cmd sudo
+    require_cmd pacman
+    require_cmd findmnt
+    require_cmd blkid
+    require_cmd lsblk
+    require_cmd awk
+    require_cmd sed
+    require_cmd grep
+    require_cmd cmp
+    require_cmd mktemp
     [[ -d /sys/firmware/efi ]] || fatal "Not booted in EFI mode."
     [[ -f /etc/mkinitcpio.conf ]] || fatal "/etc/mkinitcpio.conf not found."
     [[ "$(stat -f -c %T /)" == "btrfs" ]] || fatal "Root is not Btrfs."
