@@ -51,7 +51,7 @@ pages:
           type: exec
           command: $HOME/user_scripts/theme_matugen/theme_ctl.sh set --mode light
           terminal: false
-    - type: button
+    - type: grid_card
       properties:
         title: Reload CC
         icon: system-reboot-symbolic
@@ -76,7 +76,7 @@ pages:
         type: exec
         command: kitty --class update_dusky.sh --title "System Updater" --hold sh -c "$HOME/user_scripts/update_dusky/update_dusky.sh"
         terminal: false
-    - type: button
+    - type: grid_card
       properties:
         title: Power
         icon: system-log-out-symbolic

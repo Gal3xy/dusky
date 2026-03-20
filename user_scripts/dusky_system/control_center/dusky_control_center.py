@@ -7,13 +7,15 @@ Fully UWSM-compliant for Arch Linux/Hyprland environments.
 
 Validated Production Improvements:
 - Error UI: Config structure/type errors are surfaced via Adw.StatusPage.
+- Grid Isolation: Malformed grid cards fallback to error rows without breaking the FlowBox.
 - Hot Reload: Reload requests are coalesced; failed rebuilds roll back UI/CSS.
 - Search: Results navigate to nested navigation pages and cover implicit sections.
 - Search Performance: Directory generators are cached per loaded config.
 - Resource Safety: CSS provider lifecycle is fully guarded against leaks.
 - UX: Hot reload preserves selection; search restore behavior is deterministic.
-- Stability: Pango markup is properly escaped to prevent parsing errors on special characters.
+- Stability: Plain-text widget properties are passed as plain text, avoiding escaped entity artifacts.
 """
+
 from __future__ import annotations
 
 import gc
@@ -131,6 +133,7 @@ ICON_SIDEBAR_TOGGLE: Final[str] = "sidebar-show-symbolic"
 # =============================================================================
 class ItemType(StrEnum):
     """Valid item types in config."""
+
     BUTTON = "button"
     TOGGLE = "toggle"
     LABEL = "label"
@@ -147,12 +150,14 @@ class ItemType(StrEnum):
 
 class SectionType(StrEnum):
     """Valid section types."""
+
     SECTION = "section"
     GRID_SECTION = "grid_section"
 
 
 class ItemProperties(TypedDict, total=False):
     """Properties for UI items."""
+
     title: str
     description: str
     icon: str
@@ -176,6 +181,7 @@ class ItemProperties(TypedDict, total=False):
 
 class ConfigItem(TypedDict, total=False):
     """A single item in the configuration."""
+
     type: str
     properties: ItemProperties
     on_press: dict[str, Any] | None
@@ -190,6 +196,7 @@ class ConfigItem(TypedDict, total=False):
 
 class ConfigSection(TypedDict, total=False):
     """A section containing items."""
+
     type: str
     properties: ItemProperties
     items: list[ConfigItem]
@@ -197,6 +204,7 @@ class ConfigSection(TypedDict, total=False):
 
 class ConfigPage(TypedDict):
     """A navigation page (required keys)."""
+
     id: NotRequired[str]
     title: str
     icon: NotRequired[str]
@@ -205,11 +213,13 @@ class ConfigPage(TypedDict):
 
 class AppConfig(TypedDict):
     """Root configuration object."""
+
     pages: list[ConfigPage]
 
 
 class RowContext(TypedDict):
     """Shared context passed to row builders."""
+
     stack: Adw.ViewStack | None
     config: AppConfig
     sidebar: Gtk.ListBox | None
@@ -221,6 +231,7 @@ class RowContext(TypedDict):
 
 class ConfigLoadResult(TypedDict):
     """Result from config loading operation."""
+
     success: bool
     config: AppConfig
     css: str
@@ -244,6 +255,7 @@ class ApplicationState:
     All mutations occur on the main GTK thread via GLib.idle_add,
     eliminating the need for explicit locking in the main controller.
     """
+
     config: AppConfig = field(default_factory=lambda: {"pages": []})
     css_content: str = ""
     last_visible_page: str | None = None
@@ -491,33 +503,49 @@ class DuskyControlCenter(Adw.Application):
         except FileNotFoundError:
             log.info("No custom CSS file found at: %s", css_path)
             return ""
+        except UnicodeDecodeError as e:
+            log.warning("CSS file is not valid UTF-8: %s (%s)", css_path, e)
+            return ""
         except OSError as e:
             log.warning("Failed to read CSS file: %s", e)
             return ""
 
     def _apply_css(self) -> None:
-        """Apply loaded CSS to the default display."""
-        self._remove_css_provider()
-
+        """Apply loaded CSS without discarding the last working provider on parse failure."""
         if not self._state.css_content:
+            self._remove_css_provider()
+            self._display = Gdk.Display.get_default()
             return
 
-        self._display = Gdk.Display.get_default()
-        if self._display is None:
+        display = Gdk.Display.get_default()
+        if display is None:
             log.warning("No default display available for CSS")
             return
 
         provider = Gtk.CssProvider()
         try:
             provider.load_from_string(self._state.css_content)
-            Gtk.StyleContext.add_provider_for_display(
-                self._display,
-                provider,
-                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
-            )
-            self._css_provider = provider
         except GLib.Error as e:
             log.error("CSS parsing failed: %s", e.message)
+            return
+
+        old_provider = self._css_provider
+        old_display = self._display
+
+        Gtk.StyleContext.add_provider_for_display(
+            display,
+            provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+        )
+
+        self._css_provider = provider
+        self._display = display
+
+        if old_provider is not None and old_display is not None:
+            try:
+                Gtk.StyleContext.remove_provider_for_display(old_display, old_provider)
+            except Exception as e:
+                log.debug("CSS provider removal warning: %s", e)
 
     def _get_context(
         self,
@@ -723,6 +751,7 @@ class DuskyControlCenter(Adw.Application):
         """
         Execute a task in a background thread and callback on main thread.
         """
+
         def wrapper() -> None:
             result: Any = None
             error: BaseException | None = None
@@ -777,19 +806,20 @@ class DuskyControlCenter(Adw.Application):
     # ─────────────────────────────────────────────────────────────────────────
     # SEARCH FUNCTIONALITY
     # ─────────────────────────────────────────────────────────────────────────
-    def _generate_widget_id(self, title: str, nav_path: list[str] | tuple[str, ...]) -> str:
-        """Generate a deterministic ID based on breadcrumb path and title."""
-        raw_id = f"search_{'_'.join(nav_path)}_{title}".replace(" ", "_").casefold()
-        return "".join(c for c in raw_id if c.isalnum() or c == "_")
+    def _generate_widget_id(self, item: object) -> str:
+        """Generate a runtime-unique widget ID for a config item."""
+        return f"cfg_{id(item):x}"
 
     def _highlight_widget_by_id(self, parent: Gtk.Widget, unique_id: str) -> Literal[False]:
         """Find the widget by its ID, auto-scroll to it, and trigger a visual pulse."""
         widget = self._find_widget_by_name(parent, unique_id)
         if widget:
-            widget.grab_focus()  # Automatically scrolls the widget into view
+            widget.grab_focus()
             widget.add_css_class("highlight-pulse")
-            # Remove the pulse class after 1.5 seconds to complete the animation
-            GLib.timeout_add(1500, lambda w=widget: (w.remove_css_class("highlight-pulse"), GLib.SOURCE_REMOVE)[1])
+            GLib.timeout_add(
+                1500,
+                lambda w=widget: (w.remove_css_class("highlight-pulse"), GLib.SOURCE_REMOVE)[1],
+            )
         return GLib.SOURCE_REMOVE
 
     def _find_widget_by_name(self, parent: Gtk.Widget, name: str) -> Gtk.Widget | None:
@@ -918,8 +948,7 @@ class DuskyControlCenter(Adw.Application):
         if self._search_results_group is not None:
             page.remove(self._search_results_group)
 
-        safe_title = GLib.markup_escape_text(title)
-        self._search_results_group = Adw.PreferencesGroup(title=safe_title)
+        self._search_results_group = Adw.PreferencesGroup(title=GLib.markup_escape_text(title))
         page.add(self._search_results_group)
 
     def _populate_search_results(self, query: str) -> None:
@@ -932,8 +961,8 @@ class DuskyControlCenter(Adw.Application):
         for hit in self._iter_matching_items(query):
             if count >= SEARCH_MAX_RESULTS:
                 overflow_row = Adw.ActionRow(
-                    title=GLib.markup_escape_text(f"Showing first {SEARCH_MAX_RESULTS} results..."),
-                    subtitle=GLib.markup_escape_text("Refine your search for more specific results"),
+                    title=f"Showing first {SEARCH_MAX_RESULTS} results...",
+                    subtitle="Refine your search for more specific results",
                 )
                 overflow_row.set_activatable(False)
                 overflow_row.add_css_class("dim-label")
@@ -945,8 +974,8 @@ class DuskyControlCenter(Adw.Application):
 
         if count == 0:
             no_results = Adw.ActionRow(
-                title=GLib.markup_escape_text("No results found"),
-                subtitle=GLib.markup_escape_text("Try different search terms"),
+                title="No results found",
+                subtitle="Try different search terms",
             )
             no_results.set_activatable(False)
             self._search_results_group.add(no_results)
@@ -954,7 +983,7 @@ class DuskyControlCenter(Adw.Application):
     def _build_search_result_row(self, hit: SearchHit) -> Adw.ActionRow:
         """Build a clickable row that navigates to the matched item's location."""
         row = Adw.ActionRow(
-            title=GLib.markup_escape_text(hit.title), 
+            title=GLib.markup_escape_text(hit.title),
             subtitle=GLib.markup_escape_text(hit.description)
         )
         row.add_css_class("action-row")
@@ -994,8 +1023,7 @@ class DuskyControlCenter(Adw.Application):
             child = self._stack.get_child_by_name(page_name)
             if isinstance(child, Adw.NavigationView):
                 target_page = child.get_visible_page()
-                
-                # If the item lives deep in a navigation hierarchy, we must dynamically build and push the pages
+
                 if len(hit.nav_path) > 1:
                     current_layout = self._state.config.get("pages", [])[hit.page_idx].get("layout", [])
                     current_path = [hit.nav_path[0]]
@@ -1003,8 +1031,7 @@ class DuskyControlCenter(Adw.Application):
                     for depth in range(1, len(hit.nav_path)):
                         step_title = hit.nav_path[depth]
                         current_path.append(step_title)
-                        
-                        # Helper to find the sub-layout in the config tree
+
                         def find_layout(layout_data: list[Any]) -> list[Any] | None:
                             for section in layout_data:
                                 if not isinstance(section, dict):
@@ -1026,12 +1053,11 @@ class DuskyControlCenter(Adw.Application):
                         next_layout = find_layout(current_layout)
                         if next_layout is None:
                             break
-                        
+
                         current_layout = next_layout
                         tag = self._make_nav_tag(current_path)
                         page = child.find_page(tag)
-                        
-                        # If the page hasn't been built yet, build it now
+
                         if page is None:
                             ctx = self._get_context(
                                 nav_view=child,
@@ -1039,11 +1065,10 @@ class DuskyControlCenter(Adw.Application):
                                 path=list(current_path),
                             )
                             page = self._build_nav_page(step_title, current_layout, ctx)
-                            
+
                         child.push(page)
                         target_page = page
 
-        # Initiate highlight with a slight delay so GTK can calculate layout and scroll bounds
         if target_page:
             GLib.timeout_add(150, self._highlight_widget_by_id, target_page, hit.unique_id)
 
@@ -1127,7 +1152,7 @@ class DuskyControlCenter(Adw.Application):
         title = str(props.get("title", "")).strip()
         desc = str(props.get("description", "")).strip()
 
-        unique_id = self._generate_widget_id(title, nav_path)
+        unique_id = self._generate_widget_id(item)
 
         if query in title.casefold() or query in desc.casefold():
             yield SearchHit(
@@ -1380,23 +1405,7 @@ class DuskyControlCenter(Adw.Application):
                 continue
 
             group = Adw.PreferencesGroup()
-            item: ConfigItem = {
-                key: section[key]
-                for key in (
-                    "type",
-                    "properties",
-                    "on_press",
-                    "on_toggle",
-                    "on_change",
-                    "on_action",
-                    "layout",
-                    "items",
-                    "item_template",
-                    "value",
-                )
-                if key in section
-            }
-            group.add(self._build_item_row(item, ctx))
+            group.add(self._build_item_row(section, ctx))
             page.add(group)
 
     def _build_grid_section(
@@ -1407,6 +1416,8 @@ class DuskyControlCenter(Adw.Application):
         """Build a grid section with flow box layout."""
         group = Adw.PreferencesGroup()
         props = section.get("properties", {})
+        if not isinstance(props, dict):
+            props = {}
 
         if title := props.get("title"):
             group.set_title(GLib.markup_escape_text(str(title)))
@@ -1419,17 +1430,38 @@ class DuskyControlCenter(Adw.Application):
         flow.set_min_children_per_line(2)
         flow.set_max_children_per_line(3)
 
+        def append_grid_item(grid_item: ConfigItem) -> None:
+            item_type = grid_item.get("type", "")
+            item_props = grid_item.get("properties", {})
+            if not isinstance(item_props, dict):
+                item_props = {}
+
+            try:
+                match item_type:
+                    case ItemType.TOGGLE_CARD:
+                        child = rows.GridToggleCard(item_props, grid_item.get("on_toggle"), ctx)
+                    case ItemType.GRID_CARD:
+                        child = rows.GridCard(item_props, grid_item.get("on_press"), ctx)
+                    case _:
+                        log.warning(
+                            "Unsupported grid item type '%s', defaulting to GridCard",
+                            item_type,
+                        )
+                        child = rows.GridCard(item_props, grid_item.get("on_press"), ctx)
+            except Exception as e:
+                log.error("Failed to build grid item for type '%s': %s", item_type, e)
+                flow.append(self._build_error_row(str(e), str(item_props.get("title", "Unknown"))))
+                return
+
+            child.set_name(self._generate_widget_id(grid_item))
+            flow.append(child)
+
         for item in section.get("items", []):
-            item_type = item.get("type", "")
-            item_props = item.get("properties", {})
-
-            if item_type == ItemType.TOGGLE_CARD:
-                card = rows.GridToggleCard(item_props, item.get("on_toggle"), ctx)
+            if item.get("type") == ItemType.DIRECTORY_GENERATOR:
+                for gen_item in self._process_directory_generator(item):
+                    append_grid_item(gen_item)
             else:
-                card = rows.GridCard(item_props, item.get("on_press"), ctx)
-
-            card.set_name(self._generate_widget_id(str(item_props.get("title", "")), ctx.get("path", [])))
-            flow.append(card)
+                append_grid_item(item)
 
         group.add(flow)
         return group
@@ -1523,7 +1555,7 @@ class DuskyControlCenter(Adw.Application):
 
     def _build_item_row(
         self,
-        item: ConfigItem,
+        item: ConfigItem | ConfigSection,
         ctx: RowContext,
     ) -> Adw.PreferencesRow:
         """
@@ -1562,14 +1594,13 @@ class DuskyControlCenter(Adw.Application):
                     row = rows.ButtonRow(props, item.get("on_press"), ctx)
 
             if row is not None:
-                title = str(props.get("title", ""))
-                row.set_name(self._generate_widget_id(title, ctx.get("path", [])))
-            
+                row.set_name(self._generate_widget_id(item))
+
             return row
 
         except Exception as e:
             log.error("Failed to build row for type '%s': %s", item_type, e)
-            return self._build_error_row(str(e), props.get("title", "Unknown"))
+            return self._build_error_row(str(e), str(props.get("title", "Unknown")))
 
     def _build_warning_banner(self, props: ItemProperties) -> Adw.PreferencesRow:
         """Build a warning banner row."""
@@ -1587,13 +1618,13 @@ class DuskyControlCenter(Adw.Application):
         icon.add_css_class("warning-banner-icon")
 
         title = Gtk.Label(
-            label=GLib.markup_escape_text(str(props.get("title", "Warning"))),
+            label=str(props.get("title", "Warning")),
             css_classes=["title-1"],
         )
         title.set_halign(Gtk.Align.CENTER)
 
         message = Gtk.Label(
-            label=GLib.markup_escape_text(str(props.get("message", ""))),
+            label=str(props.get("message", "")),
             css_classes=["body"],
         )
         message.set_halign(Gtk.Align.CENTER)
