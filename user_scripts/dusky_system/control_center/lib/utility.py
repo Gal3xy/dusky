@@ -227,8 +227,18 @@ def execute_command(cmd_string: str, title: str, run_in_terminal: bool) -> bool:
 
 
 def _normalize_command(cmd_string: str) -> str:
-    """Trim surrounding whitespace only."""
-    return cmd_string.strip()
+    """Trim surrounding whitespace and safely expand $HOME/~ to absolute paths."""
+    cmd = cmd_string.strip()
+    home_dir = str(Path.home())
+
+    cmd = cmd.replace("$HOME", home_dir)
+
+    if cmd.startswith("~/"):
+        cmd = home_dir + cmd[1:]
+
+    cmd = cmd.replace(" ~/", f" {home_dir}/")
+
+    return cmd
 
 
 def _sanitize_title(title: str | None) -> str:
