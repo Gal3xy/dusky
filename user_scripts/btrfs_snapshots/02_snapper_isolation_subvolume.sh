@@ -163,11 +163,28 @@ post_install_checks() {
 
 ensure_snapper_config() {
     local config_name="$1" config_path="$2"
+    local snap_dir="${config_path}/.snapshots"
+    snap_dir="${snap_dir//\/\//\/}" # Clean double slashes
+
     if sudo snapper -c "$config_name" get-config >/dev/null 2>&1; then
         info "Snapper ${config_name} exists."
         return 0
     fi
-    mountpoint -q "${config_path}/.snapshots" && fatal "${config_path}/.snapshots is already a mountpoint."
+
+    if mountpoint -q "$snap_dir"; then
+        warn "${snap_dir} is already mounted. Temporarily unmounting to allow Snapper to initialize..."
+        sudo umount "$snap_dir" || fatal "Failed to unmount ${snap_dir}"
+    fi
+
+    if [[ -e "$snap_dir" ]]; then
+        if path_is_btrfs_subvolume "$snap_dir"; then
+            dir_is_empty "$snap_dir" || fatal "${snap_dir} is a populated subvolume. Cannot proceed safely."
+            sudo btrfs subvolume delete "$snap_dir" >/dev/null || true
+        else
+            dir_is_empty "$snap_dir" || fatal "${snap_dir} directory is not empty after unmounting."
+            sudo rmdir "$snap_dir" 2>/dev/null || true
+        fi
+    fi
 
     sudo snapper -c "$config_name" create-config "$config_path"
     ROLLBACK_CMDS+=("sudo snapper -c ${config_name} delete-config")
@@ -288,11 +305,14 @@ apply_global_btrfs_tuning() {
 enforce_flat_topology() {
     local sv tmp
 
-    # 1. Destroy existing nested subvolumes
+    # 1. Destroy existing nested subvolumes UNLESS explicitly mounted
     for sv in /var/lib/machines /var/lib/portables; do
+        if findmnt -M "$sv" >/dev/null 2>&1; then
+            info "$sv is an actively mounted filesystem. Preserving explicit layout."
+            continue
+        fi
+
         if path_is_btrfs_subvolume "$sv"; then
-            # Unmount in case systemd-machined is actively using it
-            mountpoint -q "$sv" && sudo umount -q "$sv" 2>/dev/null || true
             sudo btrfs subvolume delete "$sv" >/dev/null 2>&1 || warn "Failed to delete subvolume $sv"
             info "Deleted nested systemd subvolume: $sv"
         fi
