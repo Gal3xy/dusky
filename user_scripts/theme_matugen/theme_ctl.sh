@@ -422,17 +422,6 @@ ensure_awww_running() {
 
     log "Starting awww-daemon..."
 
-    if command -v systemctl >/dev/null 2>&1 && systemctl --user cat awww.service >/dev/null 2>&1; then
-        if systemctl --user start awww.service >/dev/null 2>&1; then
-            if wait_for_process "awww-daemon"; then
-                return 0
-            fi
-            warn "awww.service started, but awww-daemon did not appear in time. Falling back to direct launch."
-        else
-            warn "Failed to start awww.service. Falling back to direct launch."
-        fi
-    fi
-
     if command -v uwsm-app >/dev/null 2>&1; then
         uwsm-app -- awww-daemon --format xrgb >/dev/null 2>&1 99>&- &
     else
@@ -683,9 +672,12 @@ regenerate_current() {
     query_output=$(awww query 2>&1) || die "awww query failed: $query_output"
 
     while IFS= read -r line; do
-        [[ "$line" == *"currently displaying: image: "* ]] || continue
-        current_wallpaper="${line##*image: }"
-        break
+        if [[ "$line" == *"currently displaying: image: "* ]]; then
+            current_wallpaper="${line##*image: }"
+            break
+        elif [[ "$line" == *"currently displaying: color: "* ]]; then
+            die "awww is currently displaying a solid color. Please set a wallpaper first (e.g., 'theme_ctl random') so Matugen has an image to read."
+        fi
     done <<< "$query_output"
 
     current_wallpaper=$(trim_trailing "$current_wallpaper")
