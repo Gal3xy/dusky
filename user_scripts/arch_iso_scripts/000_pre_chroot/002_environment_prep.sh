@@ -81,13 +81,11 @@ done
 
 printf '%b=== PRE-INSTALL ENVIRONMENT SETUP ===%b\n' "$C_BOLD" "$C_RESET"
 
-# If there's no interactive terminal, automatically enable autonomous mode.
 if (( AUTO_MODE == 0 )) && [[ ! -t 0 ]]; then
     msg_info "No interactive terminal detected; enabling autonomous mode."
     AUTO_MODE=1
 fi
 
-# If not already in auto mode, ask once up front.
 if (( AUTO_MODE == 0 )); then
     AUTO_REPLY=""
     if ! read -r -p ":: Run in autonomous mode (no further prompts)? [y/N]: " AUTO_REPLY; then
@@ -185,26 +183,20 @@ msg_info "Configuring Time (NTP)..."
 timedatectl set-ntp true
 
 # 5. Pacman Init, Keyring Refresh & Tools
-# Conservative change:
-# - keep your original 4-step flow
-# - make keyring install idempotent with --needed
-# - avoid forced DB redownloads by using -Sy instead of -Syy
+# Keep archlinux-keyring installation separate so the updated keyring is
+# available before verifying subsequent package downloads.
 msg_info "Initializing and Refreshing Pacman Keys..."
 
-msg_info "1/4: pacman-key --init"
+msg_info "1/3: pacman-key --init"
 pacman-key --init
 sleep 2
 
-msg_info "2/4: pacman-key --populate archlinux"
+msg_info "2/3: pacman-key --populate archlinux"
 pacman-key --populate archlinux
 sleep 2
 
-msg_info "3/4: Installing latest archlinux-keyring..."
+msg_info "3/3: Installing latest archlinux-keyring..."
 pacman -Sy --needed --noconfirm archlinux-keyring
-sleep 2
-
-msg_info "4/4: Refreshing package databases after keyring update..."
-pacman -Sy --noconfirm
 sleep 2
 
 msg_info "Installing Tools (Neovim, Git, Curl)..."
