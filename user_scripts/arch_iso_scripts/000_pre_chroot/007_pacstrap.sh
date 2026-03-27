@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # -----------------------------------------------------------------------------
 # MODULE: PACSTRAP (HARDWARE-VERIFIED & UNIFIED CACHE EDITION)
-# AUTHOR: Elite DevOps Setup
 # -----------------------------------------------------------------------------
 set -euo pipefail
 
@@ -18,12 +17,13 @@ fi
 
 # --- Configuration ---
 readonly MOUNT_POINT="/mnt"
+AUTO_MODE=0
 USE_GENERIC_FIRMWARE=0
 HW_CACHE=""
 VM_DETECTED=0
+CONNECTIVITY_HOST=""
 
 # Base packages every system needs.
-# Added 'linux-firmware-other' to catch minor USB/controllers missed by split packages.
 FINAL_PACKAGES=(
     base base-devel linux linux-headers
     neovim btrfs-progs dosfstools git
@@ -35,9 +35,69 @@ log_info() { echo -e "${C_GREEN}[INFO]${C_RESET} $*"; }
 log_warn() { echo -e "${C_YELLOW}[WARN]${C_RESET} $*"; }
 log_err()  { echo -e "${C_RED}[ERROR]${C_RESET} $*"; }
 
-# --- Helper: Check if package exists in Arch Repos ---
+usage() {
+    cat <<EOF
+Usage: ${0##*/} [--auto|-a] [--help|-h]
+
+Options:
+  -a, --auto   Run autonomously (no prompts)
+  -h, --help   Show this help
+EOF
+}
+
+# --- Helper: Wait for pacman lock ---
+wait_for_pacman_lock() {
+    while [[ -f /var/lib/pacman/db.lck ]]; do
+        log_warn "Waiting for pacman lock (reflector.service running?)..."
+        sleep 3
+    done
+}
+
+# --- Helper: Yes/No Prompt ---
+prompt_yes_no() {
+    local prompt="$1"
+    local default="${2:-N}"
+    local reply
+
+    case "$default" in
+        Y|y)
+            read -r -p "$prompt [Y/n] " reply || return 1
+            [[ "${reply,,}" =~ ^(y|yes|)$ ]]
+            ;;
+        *)
+            read -r -p "$prompt [y/N] " reply || return 1
+            [[ "${reply,,}" =~ ^(y|yes)$ ]]
+            ;;
+    esac
+}
+
+# --- Helper: Check if package exists in Arch repos ---
 package_exists() {
+    wait_for_pacman_lock
     pacman -Si "$1" &>/dev/null
+}
+
+# --- Helper: Ensure a live ISO tool exists ---
+ensure_live_tool() {
+    local cmd="$1"
+    local pkg="$2"
+
+    if ! command -v "$cmd" &>/dev/null; then
+        wait_for_pacman_lock
+        pacman -S --noconfirm --needed "$pkg" &>/dev/null
+    fi
+}
+
+# --- Helper: Network Connectivity Check ---
+check_network_connectivity() {
+    local host
+    for host in google.com archlinux.org; do
+        if ping -c 1 -W 3 "$host" &>/dev/null; then
+            CONNECTIVITY_HOST="$host"
+            return 0
+        fi
+    done
+    return 1
 }
 
 # --- Helper: Unified Hardware Cache (PCI + USB) ---
@@ -46,21 +106,16 @@ get_hw_cache() {
         local pci_data=""
         local usb_data=""
 
-        # Bootstrapping dependencies silently
-        if ! command -v lspci &>/dev/null; then
-            pacman -S --noconfirm --needed pciutils &>/dev/null
-        fi
-        if ! command -v lsusb &>/dev/null; then
-            pacman -S --noconfirm --needed usbutils &>/dev/null
-        fi
+        ensure_live_tool lspci pciutils
+        ensure_live_tool lsusb usbutils
 
         pci_data=$(lspci -mm 2>/dev/null) || pci_data=""
         usb_data=$(lsusb 2>/dev/null) || usb_data=""
-        
+
         HW_CACHE=$(printf '%s\n%s' "$pci_data" "$usb_data")
 
         # Virtualization Guard (VirtIO, VMware, VirtualBox)
-        if echo "$HW_CACHE" | grep -iEq "1af4|15ad|80ee|VirtualBox|VMware|VirtIO"; then
+        if printf '%s\n' "$HW_CACHE" | grep -iEq "1af4|15ad|80ee|VirtualBox|VMware|VirtIO"; then
             VM_DETECTED=1
         fi
     fi
@@ -75,8 +130,7 @@ detect_and_add() {
 
     echo -ne "   > Scanning for ${name}... "
 
-    # Short-circuit if a Virtual Machine is detected
-    if ((VM_DETECTED)); then
+    if (( VM_DETECTED )); then
         echo -e "${C_YELLOW}SKIPPED (VM Environment)${C_RESET}"
         return 0
     fi
@@ -84,10 +138,9 @@ detect_and_add() {
     if get_hw_cache | grep -iEq "$pattern"; then
         echo -e "${C_GREEN}FOUND${C_RESET}"
 
-        # If fallback is already active, acknowledge hardware but don't queue
-        if ((USE_GENERIC_FIRMWARE)); then
-             echo -e "     -> ${C_YELLOW}Generic mode active; bypassing specific package request.${C_RESET}"
-             return 0
+        if (( USE_GENERIC_FIRMWARE )); then
+            echo -e "     -> ${C_YELLOW}Generic mode active; bypassing specific package request.${C_RESET}"
+            return 0
         fi
 
         if package_exists "$pkg"; then
@@ -103,12 +156,46 @@ detect_and_add() {
     fi
 }
 
+# --- Helper: Remove duplicate packages while preserving order ---
+dedupe_final_packages() {
+    local pkg
+    local -A seen=()
+    local -a deduped=()
+
+    for pkg in "${FINAL_PACKAGES[@]}"; do
+        if [[ -z ${seen[$pkg]+x} ]]; then
+            deduped+=("$pkg")
+            seen["$pkg"]=1
+        fi
+    done
+
+    FINAL_PACKAGES=("${deduped[@]}")
+}
+
+# --- Parse Arguments ---
+for arg in "$@"; do
+    case "$arg" in
+        -a|--auto)
+            AUTO_MODE=1
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            log_err "Unknown option: $arg"
+            usage
+            exit 1
+            ;;
+    esac
+done
+
 # ==============================================================================
 # 1. SAFETY PRE-FLIGHT CHECKS
 # ==============================================================================
 echo -e "${C_BOLD}=== PACSTRAP: HARDWARE-VERIFIED EDITION ===${C_RESET}"
 
-if ((EUID != 0)); then
+if (( EUID != 0 )); then
     log_err "This script must be run as root."
     exit 1
 fi
@@ -118,27 +205,34 @@ if ! mountpoint -q "$MOUNT_POINT"; then
     exit 1
 fi
 
+# Ask once whether to enable autonomous mode if not already requested.
+if (( ! AUTO_MODE )); then
+    if [[ -t 0 ]]; then
+        if prompt_yes_no "Enable autonomous mode for this run (skip all prompts)?" "N"; then
+            AUTO_MODE=1
+            log_info "Autonomous mode enabled."
+        fi
+    else
+        AUTO_MODE=1
+        log_warn "Non-interactive session detected. Enabling autonomous mode."
+    fi
+fi
+
 echo -ne "[....] Checking network connectivity..."
-if ! ping -c 1 -W 3 archlinux.org &>/dev/null; then
+if ! check_network_connectivity; then
     echo -e "\r[${C_RED}FAIL${C_RESET}] Checking network connectivity"
-    log_err "No internet connection. Cannot install packages."
+    log_err "No internet connection. Could not reach google.com or archlinux.org."
     exit 1
 fi
-echo -e "\r[${C_GREEN} OK ${C_RESET}] Checking network connectivity"
+echo -e "\r[${C_GREEN} OK ${C_RESET}] Checking network connectivity (${CONNECTIVITY_HOST})"
 
-# Wait for pacman lock (Resolves Live ISO Reflector race condition)
-while [[ -f /var/lib/pacman/db.lck ]]; do
-    log_warn "Waiting for pacman lock (reflector.service running?)..."
-    sleep 3
-done
-
+wait_for_pacman_lock
 log_info "Syncing package databases..."
 pacman -Sy --noconfirm &>/dev/null
 
 # ==============================================================================
 # 2. CPU MICROCODE
 # ==============================================================================
-# Robust awk parsing that ignores tabs/spacing quirks
 CPU_VENDOR=$(awk '/^vendor_id/ {print $3; exit}' /proc/cpuinfo)
 
 case "$CPU_VENDOR" in
@@ -160,47 +254,46 @@ esac
 # ==============================================================================
 log_info "Scanning Hardware Topography (PCI + USB)..."
 
-# Prime the cache and check for VMs
 get_hw_cache >/dev/null
 
-if ((VM_DETECTED)); then
+if (( VM_DETECTED )); then
     log_warn "Virtual Machine detected. Bypassing bare-metal firmware discovery."
 fi
 
 # -- GRAPHICS --
-detect_and_add "Nvidia GPU"        "10de|nvidia"            "linux-firmware-nvidia"
-detect_and_add "AMD GPU (Modern)"  "1002|amdgpu|navi|rdna"  "linux-firmware-amdgpu"
-detect_and_add "AMD GPU (Legacy)"  "\b(radeon|ati)\b"       "linux-firmware-radeon"
+detect_and_add "Nvidia GPU"         "10de|nvidia"            "linux-firmware-nvidia"
+detect_and_add "AMD GPU (Modern)"   "1002|amdgpu|navi|rdna"  "linux-firmware-amdgpu"
+detect_and_add "AMD GPU (Legacy)"   "\b(radeon|ati)\b"       "linux-firmware-radeon"
 
 # -- NETWORKING & BLUETOOTH --
-detect_and_add "Intel Network/BT"  "intel.*(network|wireless|bluetooth)|8086" "linux-firmware-intel"
-detect_and_add "Mediatek WiFi/BT"  "mediatek"               "linux-firmware-mediatek"
-detect_and_add "Broadcom WiFi/BT"  "broadcom"               "linux-firmware-broadcom"
-detect_and_add "Atheros WiFi/BT"   "atheros"                "linux-firmware-atheros"
-detect_and_add "Realtek Eth/WiFi"  "realtek|\brtl"          "linux-firmware-realtek"
+detect_and_add "Intel Network/BT"   "intel.*(network|wireless|bluetooth)|8086" "linux-firmware-intel"
+detect_and_add "Mediatek WiFi/BT"   "mediatek"               "linux-firmware-mediatek"
+detect_and_add "Broadcom WiFi/BT"   "broadcom"               "linux-firmware-broadcom"
+detect_and_add "Atheros WiFi/BT"    "atheros"                "linux-firmware-atheros"
+detect_and_add "Realtek Eth/WiFi"   "realtek|\brtl"          "linux-firmware-realtek"
 
 # -- AUDIO --
-detect_and_add "Intel SOF Audio"   "audio.*intel|8086"      "sof-firmware"
-detect_and_add "Cirrus Logic Audio""cirrus"                 "linux-firmware-cirrus"
+detect_and_add "Intel SOF Audio"    "audio.*intel|8086"      "sof-firmware"
+detect_and_add "Cirrus Logic Audio" "cirrus"                 "linux-firmware-cirrus"
 
 # ==============================================================================
 # 4. FINAL PACKAGE ASSEMBLY
 # ==============================================================================
-if ((USE_GENERIC_FIRMWARE)); then
+if (( USE_GENERIC_FIRMWARE )); then
     log_warn "Fallback Triggered: Consolidating to generic linux-firmware."
 
-    # Filter out specific firmware packages if they sneaked in before fallback triggered
     CLEAN_LIST=()
     for pkg in "${FINAL_PACKAGES[@]}"; do
         [[ "$pkg" == linux-firmware-* || "$pkg" == "sof-firmware" ]] || CLEAN_LIST+=("$pkg")
     done
     FINAL_PACKAGES=("${CLEAN_LIST[@]}" "linux-firmware")
 else
-    # Add the license file required by split packages (only if not running generic)
-    if ! ((VM_DETECTED)); then
+    if ! (( VM_DETECTED )); then
         FINAL_PACKAGES+=("linux-firmware-whence")
     fi
 fi
+
+dedupe_final_packages
 
 # ==============================================================================
 # 5. EXECUTION
@@ -210,13 +303,17 @@ echo -e "${C_BOLD}Final Package List:${C_RESET}"
 printf '%s\n' "${FINAL_PACKAGES[@]}"
 echo ""
 
-read -r -p "Ready to run pacstrap? [Y/n] " confirm
-if [[ ! "${confirm,,}" =~ ^(y|yes|)$ ]]; then
-    log_warn "Aborted by user."
-    exit 0
+if (( AUTO_MODE )); then
+    log_info "Autonomous mode active. Proceeding with pacstrap."
+else
+    if ! prompt_yes_no "Ready to run pacstrap?" "Y"; then
+        log_warn "Aborted by user."
+        exit 0
+    fi
 fi
 
 echo "Installing..."
+wait_for_pacman_lock
 pacstrap -K "$MOUNT_POINT" "${FINAL_PACKAGES[@]}" --needed
 
 echo -e "\n${C_GREEN}Pacstrap Complete.${C_RESET}"
