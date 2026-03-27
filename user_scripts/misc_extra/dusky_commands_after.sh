@@ -28,7 +28,8 @@ declare -ra FLEET_COMMANDS=(
     # --- System Services ---
 #    "U | systemctl --user disable dusky.service || true"
 #    "S | systemctl enable --now tlp.service || true"
-     "U | hyprctl reload"
+    "S | ln -nfs /usr/bin/awww /usr/bin/swww || true"
+    "U | hyprctl reload"
 )
 
 # ==============================================================================
