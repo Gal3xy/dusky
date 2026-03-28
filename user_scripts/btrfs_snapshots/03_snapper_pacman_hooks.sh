@@ -319,12 +319,19 @@ baseline_snapshot_ids_with_cleanup() {
     sudo snapper --csv -c "$1" list 2>/dev/null | awk -F',' -v desc="$2" -v cleanup="$3" '
         NR == 1 {
             for (i = 1; i <= NF; i++) {
-                if ($i == "description") desc_col = i
+                if ($i == "number") num_col = i
                 else if ($i == "cleanup") cleanup_col = i
+                else if ($i == "description") desc_col = i
             }
             next
         }
-        desc_col && cleanup_col && $desc_col == desc && $cleanup_col == cleanup { print $1 }
+        num_col && cleanup_col && desc_col &&
+        $desc_col == desc &&
+        $cleanup_col == cleanup &&
+        $num_col ~ /^[0-9]+$/ &&
+        $num_col != "0" {
+            print $num_col
+        }
     '
 }
 
@@ -351,6 +358,8 @@ create_post_config_baseline_snapshot() {
     for cfg in root home; do
         while IFS= read -r snap_id; do
             [[ -n "$snap_id" ]] || continue
+            [[ "$snap_id" =~ ^[0-9]+$ ]] || fatal "Unexpected non-numeric snapshot id parsed for ${cfg}: ${snap_id}"
+            [[ "$snap_id" == "0" ]] && continue
             sudo snapper -c "$cfg" delete "$snap_id"
             info "Removed old important baseline snapshot ${cfg}#${snap_id} so it can be recreated with number cleanup."
         done < <(baseline_snapshot_ids_with_cleanup "$cfg" "$desc" "important")
