@@ -181,14 +181,14 @@ git_fetch() {
 _git_rev_count() {
     local -n _out_ref=$1
     local revspec=$2
-    local count=''
+    local _raw_count=''
 
-    if ! count=$("${GIT_CMD[@]}" rev-list --count "$revspec" 2>/dev/null); then
+    if ! _raw_count=$("${GIT_CMD[@]}" rev-list --count "$revspec" 2>/dev/null); then
         return 1
     fi
 
-    [[ $count =~ ^[0-9]+$ ]] || return 1
-    _out_ref=$count
+    [[ $_raw_count =~ ^[0-9]+$ ]] || return 1
+    _out_ref=$_raw_count
 }
 
 write_state_file() {
