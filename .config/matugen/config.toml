@@ -101,7 +101,7 @@ post_hook   = '''
 
 # [templates.opencode]
 # input_path = '~/.config/matugen/templates/opencode-colors.json'
-# output_path = '~/.config/opencode/generated/opencode.json'
+# output_path = '~/.config/opencode/themes/matugen-opencode.json'
 
 # [templates.vscode]
 # input_path  = '~/.config/matugen/templates/vscode.json'
