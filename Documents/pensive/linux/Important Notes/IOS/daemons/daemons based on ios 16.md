@@ -24,7 +24,7 @@ Conservative legend:
 | 13  | afcd                          | Apple File Conduit for USB file access and Finder/iTunes file sharing                        | yes                            |
 | 14  | aggregated                    | System analytics aggregation                                                                 | yes                            |
 | 15  | aggregated.addaily            | Advertising-related daily aggregation task                                                   | yes                            |
-| 16  | akd                           | AuthKit daemon for Apple ID authentication and tokens                                        | NO                             |
+| 16  | akd                           | apple id account login                                                                       | NO                             |
 | 17  | amsaccountsd                  | Apple Media Services account handling                                                        | no                             |
 | 18  | amsengagementd                | Apple Media Services engagement telemetry                                                    | yes                            |
 | 19  | analyticsd                    | System analytics and diagnostics collection                                                  | yes                            |
@@ -143,9 +143,9 @@ Conservative legend:
 | 132 | distnoted.xpc.daemon          | Distributed notifications service                                                            | NO                             |
 | 133 | dmd                           | Declarative Device Management daemon                                                         | if-unused                      |
 | 134 | DMHelper                      | Device-management helper                                                                     | if-unused                      |
-| 135 | donotdisturbd                 | Do Not Disturb / Focus management                                                            | if-unused                      |
+| 135 | donotdisturbd                 | Do Not Disturb / Focus management                                                            | NO                             |
 | 136 | dprivacyd                     | Differential Privacy telemetry service                                                       | yes                            |
-| 137 | DragUI.druid                  | Drag-and-drop UI support                                                                     | if-unused                      |
+| 137 | DragUI.druid                  | Drag-and-drop UI support                                                                     | NO                             |
 | 138 | driverkitd                    | DriverKit user-space driver host service                                                     | no                             |
 | 139 | dt.automationmode-writer      | Developer Automation Mode support task                                                       | yes                            |
 | 140 | dt.AutomationModeUI           | Developer Automation Mode UI service                                                         | yes                            |
