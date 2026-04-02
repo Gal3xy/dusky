@@ -83,7 +83,7 @@ while (($# > 0)); do
 done
 
 has_tty() {
-    [[ -t 0 && -t 1 ]]
+    [[ -t 0 ]]
 }
 
 ensure_tty() {
