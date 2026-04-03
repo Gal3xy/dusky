@@ -818,29 +818,62 @@ main() {
     fi
 
     # --- SESSION RECOVERY ---
-    if [[ -s "$STATE_FILE" ]]; then
-        echo -e "\n${YELLOW}>>> PREVIOUS SESSION DETECTED <<<${RESET}"
-        if [[ $interactive_mode -eq 1 ]]; then
-            read -r -p "Do you want to [C]ontinue where you left off or [S]tart over? [C/s]: " _session_choice
-            if [[ "${_session_choice,,}" == "s" || "${_session_choice,,}" == "start" ]]; then
-                rm -f "$STATE_FILE"
-                touch "$STATE_FILE"
-                log "INFO" "State file reset. Starting fresh."
-            else
-                log "INFO" "Continuing from previous session."
-            fi
-        else
-            log "INFO" "Previous session detected. Autonomous mode will continue from existing state."
-        fi
-    fi
-
     load_state
 
     local total_scripts=0
+    local completed_scripts=0
+    local -A temp_seen_keys=()
+
     for entry in "${INSTALL_SEQUENCE[@]}"; do
         [[ -n "${entry//[[:space:]]/}" ]] || continue
         (( ++total_scripts ))
+
+        local t_mode="" t_filename="" t_base_key="" t_ignore=0
+        local -a t_args=()
+        parse_install_entry "$entry" t_mode t_filename t_args t_base_key t_ignore
+
+        (( ++temp_seen_keys["$t_base_key"] ))
+        local t_occ="${temp_seen_keys["$t_base_key"]}"
+        local t_state_key="$(make_state_key "$t_base_key" "$t_occ")"
+
+        if state_is_completed "$t_state_key"; then
+            (( ++completed_scripts ))
+        fi
     done
+
+    if [[ -s "$STATE_FILE" && $completed_scripts -gt 0 ]]; then
+        if [[ $completed_scripts -eq $total_scripts ]]; then
+            echo -e "\n${GREEN}>>> ALL SCRIPTS COMPLETED <<<${RESET}"
+            log "INFO" "All $total_scripts scripts have already been successfully completed."
+            read -r -p "Do you want to [S]tart over completely or [Q]uit? [s/Q]: " _done_choice
+            if [[ "${_done_choice,,}" == "s" || "${_done_choice,,}" == "start" ]]; then
+                rm -f "$STATE_FILE"
+                touch "$STATE_FILE"
+                load_state
+                log "INFO" "State file reset. Starting fresh."
+                completed_scripts=0
+            else
+                log "INFO" "Exiting. Everything is already up to date."
+                exit 0
+            fi
+        else
+            echo -e "\n${YELLOW}>>> PREVIOUS SESSION DETECTED <<<${RESET}"
+            if [[ $interactive_mode -eq 1 ]]; then
+                read -r -p "Do you want to [C]ontinue where you left off or [S]tart over? [C/s]: " _session_choice
+                if [[ "${_session_choice,,}" == "s" || "${_session_choice,,}" == "start" ]]; then
+                    rm -f "$STATE_FILE"
+                    touch "$STATE_FILE"
+                    load_state
+                    log "INFO" "State file reset. Starting fresh."
+                    completed_scripts=0
+                else
+                    log "INFO" "Continuing from previous session ($completed_scripts/$total_scripts completed)."
+                fi
+            else
+                log "INFO" "Previous session detected. Autonomous mode will continue from existing state ($completed_scripts/$total_scripts completed)."
+            fi
+        fi
+    fi
 
     local current_index=0
     log "INFO" "Processing ${total_scripts} scripts..."
