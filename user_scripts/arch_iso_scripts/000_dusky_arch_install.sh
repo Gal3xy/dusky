@@ -395,10 +395,14 @@ main() {
         printf "\n"
     fi
 
-    # --- SESSION RECOVERY (From ORCHESTRA.sh) ---
+# --- SESSION RECOVERY (From ORCHESTRA.sh) ---
     local total_scripts=${#INSTALL_SEQUENCE[@]}
     local completed_scripts=0
     declare -A temp_seen_keys=()
+    
+    # Safe string assignment for the phase label
+    local phase_label="PHASE 1"
+    (( IN_CHROOT )) && phase_label="PHASE 2"
 
     for entry in "${INSTALL_SEQUENCE[@]}"; do
         local raw_command script_name
@@ -416,7 +420,7 @@ main() {
 
     if [[ -s "$STATE_FILE" && $completed_scripts -gt 0 ]]; then
         if [[ $completed_scripts -eq $total_scripts ]]; then
-            printf "%s>>> ALL %s SCRIPTS COMPLETED <<<%s\n" "$G" "$(( IN_CHROOT ? "PHASE 2" : "PHASE 1" ))" "$RS"
+            printf "%s>>> ALL %s SCRIPTS COMPLETED <<<%s\n" "$G" "$phase_label" "$RS"
             if (( AUTO_MODE == 0 )); then
                 if (( ! IN_CHROOT )); then
                     printf "Phase 1 (ISO) is already fully completed.\n"
@@ -453,7 +457,7 @@ main() {
             fi
             printf "\n"
         else
-            printf "%s>>> PREVIOUS %s SESSION DETECTED <<<%s\n" "$Y" "$(( IN_CHROOT ? "PHASE 2" : "PHASE 1" ))" "$RS"
+            printf "%s>>> PREVIOUS %s SESSION DETECTED <<<%s\n" "$Y" "$phase_label" "$RS"
             if (( AUTO_MODE == 0 )); then
                 read -r -p "Do you want to [C]ontinue where you left off or [S]tart over? [C/s]: " _session_choice
                 if [[ "${_session_choice,,}" == "s" || "${_session_choice,,}" == "start" ]]; then
