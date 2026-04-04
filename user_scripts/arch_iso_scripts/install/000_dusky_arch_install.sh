@@ -16,7 +16,7 @@ declare -ra ISO_SEQUENCE=(
   "050_mirrorlist.sh | IGNORE"
   "060_console_fix.sh"
   "070_pacstrap.sh --auto"
-  "090_fstab.sh"
+  "090_fstab.sh --auto"
 )
 
 declare -ra CHROOT_SEQUENCE=(
