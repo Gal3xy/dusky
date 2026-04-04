@@ -7,26 +7,26 @@
 
 # --- 1. SCRIPT SEQUENCES ---
 declare -ra ISO_SEQUENCE=(
-  "020_environment_prep.sh"
-  "030_partitioning.sh"
+  "020_environment_prep.sh --auto"
+  "030_partitioning.sh --auto"
   "040_disk_mount.sh --auto"
   "050_mirrorlist.sh"
   "060_console_fix.sh"
-  "070_pacstrap.sh"
+  "070_pacstrap.sh --auto"
 #  "080_script_directories_population_in_chroot.sh"
   "090_fstab.sh"
 )
 
 declare -ra CHROOT_SEQUENCE=(
-  "100_etc_skel.sh"
-  "110_post_chroot.sh"
+  "100_etc_skel.sh --auto"
+  "110_post_chroot.sh --auto"
   "120_mkintcpip_optimizer.sh"
   "130_chroot_package_installer.sh --auto"
   "140_mkinitcpio_generation.sh"
-  "150_limine_bootloader.sh"
+  "150_limine_bootloader.sh --auto"
   "160_zram_config.sh"
   "170_services.sh"
-  "180_exiting_unmounting.sh"
+  "180_exiting_unmounting.sh --auto"
 )
 
 # --- 2. SETUP & SAFETY ---
