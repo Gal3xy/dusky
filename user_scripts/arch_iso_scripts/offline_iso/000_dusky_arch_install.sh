@@ -13,7 +13,7 @@ declare -ra ISO_SEQUENCE=(
   "020_environment_prep.sh --auto"
   "030_partitioning.sh --auto"
   "040_disk_mount.sh --auto"
-  "050_mirrorlist.sh | IGNORE"
+  "051_pacman_repo_switch.sh --offline"
   "060_console_fix.sh"
   "070_pacstrap.sh --auto"
   "090_fstab.sh --auto"
@@ -28,6 +28,7 @@ declare -ra CHROOT_SEQUENCE=(
   "150_limine_bootloader.sh --auto"
   "160_zram_config.sh"
   "170_services.sh"
+  "051_pacman_repo_switch.sh --online"
   "180_exiting_unmounting.sh --auto"
 )
 
