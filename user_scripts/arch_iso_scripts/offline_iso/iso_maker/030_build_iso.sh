@@ -2,6 +2,7 @@
 # ==============================================================================
 # 030_build_iso.sh - THE FACTORY ISO GENERATOR
 # Architecture: Bypasses airootfs RAM exhaustion via dynamic mkarchiso patching.
+# Payload: Injects and maps executable dotfiles directly into /etc/skel.
 # ==============================================================================
 set -euo pipefail
 
@@ -45,13 +46,10 @@ echo -e "\n\e[1;34m==>\e[0m \e[1mINITIATING DUSKY ARCH ISO FACTORY BUILD\e[0m\n"
 
 # --- 3. LIVE ENVIRONMENT HOOKS (Auto-Start & SSH) ---
 echo "  -> Configuring Auto-Start Payload and SSH Access..."
-# The releng profile natively executes /root/.automated_script.sh on boot.
-# We overwrite it to establish our environment and trigger the orchestrator.
 cat << 'EOF' > "${PROFILE_DIR}/airootfs/root/.automated_script.sh"
 #!/usr/bin/env bash
 
 # ONLY execute this on the primary physical console (tty1).
-# This prevents the installer from looping if you log in via SSH.
 if [[ "$(tty)" == "/dev/tty1" ]]; then
     
     # 1. Set root password for SSH access
@@ -72,23 +70,44 @@ if [[ "$(tty)" == "/dev/tty1" ]]; then
 fi
 EOF
 
-# Ensure the hook itself is executable (profiledef.sh allows this one file)
 chmod +x "${PROFILE_DIR}/airootfs/root/.automated_script.sh"
 
-# --- 4. DYNAMIC MKARCHISO PATCHING (The payload) ---
+# --- 4. SKELETON DIRECTORY PAYLOAD (Dotfiles) ---
+echo "  -> Fetching and staging dotfiles payload into /etc/skel..."
+SKEL_DIR="${PROFILE_DIR}/airootfs/etc/skel"
+mkdir -p "${SKEL_DIR}"
+
+# 1. Clone the bare repository natively into the skeleton dir.
+# When useradd runs post-install, ~/dusky will become their operational bare repo.
+git clone --bare --depth 1 "https://github.com/dusklinux/dusky" "${SKEL_DIR}/dusky"
+
+# 2. Force checkout directly into /etc/skel so subdirectories manifest in the ISO.
+git --git-dir="${SKEL_DIR}/dusky/" --work-tree="${SKEL_DIR}" checkout -f
+
+# 3. Preserve specific executable permissions dynamically.
+echo "  -> Locking in executable permissions for /etc/skel scripts..."
+# We prune the internal bare repo so we don't accidentally map git hooks to profiledef.sh
+while IFS= read -r -d '' exec_file; do
+    # Force absolute path formatting for mkarchiso (e.g., /etc/skel/script.sh)
+    rel_path="/${exec_file#${PROFILE_DIR}/airootfs/}"
+    
+    # Safely append directly into the file_permissions array in profiledef.sh
+    echo "file_permissions+=([\"${rel_path}\"]=\"0:0:0755\")" >> "${PROFILE_DIR}/profiledef.sh"
+done < <(find "${SKEL_DIR}" -path "${SKEL_DIR}/dusky" -prune -o -type f -executable -print0)
+
+
+# --- 5. DYNAMIC MKARCHISO PATCHING (The payload) ---
 echo "  -> Cloning official mkarchiso..."
 cp /usr/bin/mkarchiso "$MKARCHISO_CUSTOM"
 chmod +x "$MKARCHISO_CUSTOM"
 
 echo "  -> Generating injection patch..."
-# We create a patch file to inject the repositories directly into the ISO staging
-# area. This ensures the host system's /srv/offline-repo remains untouched.
 cat << EOF > "$PATCH_FILE"
     _msg_info ">>> INJECTING & MERGING REPOSITORIES DIRECTLY INTO ISO <<<"
     local repo_target="\${isofs_dir}/\${install_dir}/repo"
     mkdir -p "\${repo_target}"
     
-    # 1. Copy both repositories straight into the ISO's staging area (in ZRAM)
+    # 1. Copy both repositories straight into the ISO's staging area
     cp -a "${OFFLINE_REPO_OFFICIAL}/." "\${repo_target}/"
     if [[ -d "${OFFLINE_REPO_AUR}" ]]; then
         cp -a "${OFFLINE_REPO_AUR}/." "\${repo_target}/"
@@ -100,8 +119,6 @@ cat << EOF > "$PATCH_FILE"
     
     _msg_info ">>> GENERATING MASTER DATABASE INSIDE ISO <<<"
     # 3. Filter out .sig files and generate the unified database.
-    #    Save and restore nullglob state so we don't corrupt mkarchiso's own
-    #    glob behaviour if it had the option enabled before entering this function.
     local _nullglob_state; shopt -q nullglob && _nullglob_state=1 || _nullglob_state=0
     shopt -s nullglob
     local all_files=("\${repo_target}/"*.pkg.tar.*)
@@ -123,12 +140,8 @@ cat << EOF > "$PATCH_FILE"
 EOF
 
 echo "  -> Splicing hook into mkarchiso pipeline..."
-# sed 'r' inserts the patch file's contents immediately after the matched line,
-# leaving the function declaration itself intact.
 sed -i '/^_build_iso_image() {/r '"$PATCH_FILE"'' "$MKARCHISO_CUSTOM"
 
-# sed exits 0 whether or not the pattern matched. Verify the patch actually
-# landed before proceeding.
 if ! grep -q 'INJECTING & MERGING REPOSITORIES DIRECTLY INTO ISO' "$MKARCHISO_CUSTOM"; then
     echo "[ERR] Patch was NOT injected — the sed pattern failed to match." >&2
     echo "[ERR] Inspect $MKARCHISO_CUSTOM to diagnose." >&2
@@ -136,25 +149,20 @@ if ! grep -q 'INJECTING & MERGING REPOSITORIES DIRECTLY INTO ISO' "$MKARCHISO_CU
 fi
 echo "  -> Patch verified successfully."
 
-# Patch file has been consumed; remove it to keep the workspace clean.
 rm -f "$PATCH_FILE"
 
-# --- 5. ISO GENERATION ---
+# --- 6. ISO GENERATION ---
 echo "  -> Cleaning previous build artifacts..."
 rm -rf "$WORK_DIR" "$OUT_DIR"
 
 echo -e "\n\e[1;32m==>\e[0m \e[1mSTARTING BUILD PROCESS\e[0m"
-# -m iso: explicitly target ISO mode only.
 "$MKARCHISO_CUSTOM" -v -m iso -w "$WORK_DIR" -o "$OUT_DIR" "$PROFILE_DIR"
 
-# --- 6. ARTIFACT RENAMING ---
+# --- 7. ARTIFACT RENAMING ---
 echo "  -> Renaming output to ${FINAL_ISO_NAME}..."
-# mkarchiso generates exactly one .iso file in the clean output directory
 mv "${OUT_DIR}"/*.iso "${OUT_DIR}/${FINAL_ISO_NAME}"
 
-# --- 7. PERMISSIONS RESTORATION ---
-# mkarchiso runs as root, resulting in root ownership of the output folder.
-# We hand ownership back to the standard user who invoked sudo.
+# --- 8. PERMISSIONS RESTORATION ---
 if [[ -n "${SUDO_USER:-}" ]]; then
     echo "  -> Restoring ownership of the output directory to user: $SUDO_USER..."
     chown -R "$SUDO_USER:$SUDO_USER" "$OUT_DIR"
