@@ -27,6 +27,7 @@ declare -ra CHROOT_SEQUENCE=(
   "110_post_chroot.sh --auto"
   "120_mkintcpip_optimizer.sh | IGNORE"
   "130_chroot_package_installer.sh --auto"
+  "131_chroot_aur_packages.sh --auto"
   "140_mkinitcpio_generation.sh"
   "150_limine_bootloader.sh --auto"
   "160_zram_config.sh"
