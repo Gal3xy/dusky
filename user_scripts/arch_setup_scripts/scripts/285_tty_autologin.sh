@@ -2,8 +2,8 @@
 # ==============================================================================
 # Script Name: tty_autologin_manager.sh
 # Description: Manages systemd TTY1 autologin for Arch Linux (Hyprland/UWSM).
-#              Surgically idempotent, completely non-interactive capable, safe 
-#              against sudo environment stripping, and maintains state for dusky.
+#              Surgically idempotent, non-interactive capable, chroot-safe,
+#              safe against sudo stripping, and maintains state for dusky.
 # ==============================================================================
 
 set -euo pipefail
@@ -23,12 +23,13 @@ readonly NC=$'\033[0m'
 MODE_AUTO=false
 MODE_REVERT=false
 CONFIRMED=false
+TARGET_USER_OVERRIDE=""
 
 # --- Logging ---
-log_info() { printf "${BLUE}[INFO]${NC} %s\n" "$1"; }
+log_info()    { printf "${BLUE}[INFO]${NC} %s\n" "$1"; }
 log_success() { printf "${GREEN}[SUCCESS]${NC} %s\n" "$1"; }
-log_warn() { printf "${YELLOW}[WARN]${NC} %s\n" "$1"; }
-log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1" >&2; }
+log_warn()    { printf "${YELLOW}[WARN]${NC} %s\n" "$1"; }
+log_error()   { printf "${RED}[ERROR]${NC} %s\n" "$1" >&2; }
 
 # --- CLI Parsing ---
 parse_args() {
@@ -36,13 +37,15 @@ parse_args() {
         case "$1" in
             -a|--auto)       MODE_AUTO=true ;;
             -r|--revert)     MODE_REVERT=true ;;
+            -u|--user)       TARGET_USER_OVERRIDE="$2"; shift ;;
             --_confirmed)    CONFIRMED=true ;; # Internal flag for sudo escalation
             -h|--help)
                 printf "Usage: %s [OPTIONS]\n" "${0##*/}"
                 printf "Options:\n"
-                printf "  -a, --auto    Run non-interactively (skip prompts)\n"
-                printf "  -r, --revert  Revert autologin and restore standard TTY/SDDM\n"
-                printf "  -h, --help    Show this help message\n"
+                printf "  -a, --auto        Run non-interactively (skip prompts)\n"
+                printf "  -r, --revert      Revert autologin and restore standard TTY/SDDM\n"
+                printf "  -u, --user <name> Explicitly set target user (Required in arch-chroot)\n"
+                printf "  -h, --help        Show this help message\n"
                 exit 0
                 ;;
             *)
@@ -54,30 +57,72 @@ parse_args() {
     done
 }
 
-# --- Helpers ---
+# --- Environment Detection ---
+
+# Check if SDDM is installed by inspecting the unit file on disk.
+# Direct filesystem inspection is more reliable than 'systemctl list-unit-files'
+# as it carries no dbus dependency and behaves identically in chroot and live
+# environments. On Arch Linux, pacman always installs unit files to
+# /usr/lib/systemd/system/, making this path canonical.
 sddm_is_installed() {
-    systemctl list-unit-files sddm.service 2>/dev/null | grep -q '^sddm\.service'
+    [[ -f "/usr/lib/systemd/system/sddm.service" ]]
 }
 
+# Determine if systemd is the active init system for THIS root namespace.
+#
+# The naive check (is /proc/1/comm == "systemd"?) is insufficient because
+# arch-chroot bind-mounts /proc from the host, making the host's PID 1 visible
+# inside the chroot. This function resolves ambiguity by comparing the inode of
+# PID 1's root directory (/proc/1/root) against our own root inode (/).
+#
+#   Live system:  PID 1's root inode == our root inode  → true  (systemd active)
+#   arch-chroot:  PID 1's root inode != our root inode  → false (chroot env)
+#   /proc absent: stat fails, || return 1 triggers      → false (safe default)
+#   systemd-nspawn: inodes match within container       → true  (correct)
+is_systemd_active() {
+    local pid1_comm pid1_root_inode our_root_inode
+
+    # Guard: is PID 1 even systemd?
+    pid1_comm=$(cat /proc/1/comm 2>/dev/null) || return 1
+    [[ "${pid1_comm}" == "systemd" ]] || return 1
+
+    # Guard: does PID 1 share our root? (the chroot discriminator)
+    pid1_root_inode=$(stat -Lc %i /proc/1/root 2>/dev/null) || return 1
+    our_root_inode=$(stat -c %i /              2>/dev/null) || return 1
+
+    [[ "${pid1_root_inode}" == "${our_root_inode}" ]]
+}
+
+# --- Helpers ---
 sync_state_file() {
     local user="$1"
     local state="$2"
     local user_home
-    
-    # Reliably query the NSS database for the actual home directory
+    local user_group
+
+    # Reliably query the NSS database for the actual home directory and primary group
     user_home=$(getent passwd "${user}" | cut -d: -f6)
+    user_group=$(id -gn "${user}")
+
     if [[ -z "${user_home}" ]]; then
         log_error "Could not determine home directory for user: ${user}"
         exit 1
     fi
 
-    local state_dir="${user_home}/.config/dusky/settings"
+    local config_dir="${user_home}/.config"
+    local state_dir="${config_dir}/dusky/settings"
     local state_file="${state_dir}/auto_login_tty"
 
-    # Drop privileges to target user to ensure correct ownership of directories and files
-    sudo -u "${user}" mkdir -p "${state_dir}"
-    echo "${state}" | sudo -u "${user}" tee "${state_file}" >/dev/null
-    
+    # Chroot-safe directory creation and permission enforcement (no sudo dependency)
+    if [[ ! -d "${config_dir}" ]]; then
+        mkdir -p "${config_dir}"
+        chown "${user}:${user_group}" "${config_dir}"
+    fi
+
+    mkdir -p "${state_dir}"
+    echo "${state}" > "${state_file}"
+    chown -R "${user}:${user_group}" "${config_dir}/dusky"
+
     log_info "Dusky state synced: ${state_file} -> [${state}]"
 }
 
@@ -111,7 +156,7 @@ do_setup() {
 
     if sddm_is_installed && systemctl is-enabled --quiet sddm.service 2>/dev/null; then
         log_info "Disabling SDDM..."
-        systemctl disable sddm.service --quiet
+        systemctl disable sddm.service --quiet 2>/dev/null || true
         log_success "SDDM disabled."
     fi
 
@@ -131,8 +176,13 @@ ExecStart=
 ExecStart=-/usr/bin/agetty --autologin ${user} --noclear --noissue %I \$TERM
 EOF
 
-    systemctl daemon-reload
-    
+    if is_systemd_active; then
+        systemctl daemon-reload
+        log_info "systemd daemon reloaded."
+    else
+        log_info "Non-live environment detected; skipping daemon-reload (will take effect on boot)."
+    fi
+
     sync_state_file "${user}" "true"
     log_success "Autologin configured successfully."
 }
@@ -147,14 +197,19 @@ do_revert() {
         rm -f "${OVERRIDE_FILE}"
         # Only remove the directory if it's completely empty
         rmdir --ignore-fail-on-non-empty "${SYSTEMD_DIR}" 2>/dev/null || true
-        systemctl daemon-reload
+        if is_systemd_active; then
+            systemctl daemon-reload
+            log_info "systemd daemon reloaded."
+        else
+            log_info "Non-live environment detected; skipping daemon-reload (will take effect on boot)."
+        fi
         changed=true
         log_success "Removed autologin drop-in override for ${SYSTEMD_UNIT}."
     fi
 
     if sddm_is_installed && ! systemctl is-enabled --quiet sddm.service 2>/dev/null; then
         log_info "Re-enabling SDDM..."
-        systemctl enable sddm.service --quiet
+        systemctl enable sddm.service --quiet 2>/dev/null || true
         changed=true
         log_success "SDDM enabled."
     fi
@@ -172,17 +227,20 @@ do_revert() {
 main() {
     parse_args "$@"
 
-    # 1. Determine Target Context
-    local target_user
-    if [[ "${EUID}" -eq 0 ]]; then
-        target_user="${SUDO_USER:-}"
-        if [[ -z "${target_user}" ]]; then
-            log_error "Cannot determine target user from raw root shell."
-            log_error "Execute the script directly as your standard user."
-            exit 1
+    # 1. Determine Target Context (Chroot & Live System safe)
+    local target_user="${TARGET_USER_OVERRIDE}"
+
+    if [[ -z "${target_user}" ]]; then
+        if [[ "${EUID}" -eq 0 ]]; then
+            target_user="${SUDO_USER:-}"
+            if [[ -z "${target_user}" ]]; then
+                log_error "Cannot determine target user from raw root shell (e.g., arch-chroot)."
+                log_error "Execute with '-u <username>' to specify the user explicitly."
+                exit 1
+            fi
+        else
+            target_user="${USER}"
         fi
-    else
-        target_user="${USER}"
     fi
 
     # 2. Validate User Existence
@@ -207,9 +265,9 @@ main() {
             log_error "Please save the script to disk and run it directly."
             exit 1
         fi
-        
+
         # Build array payload to prevent word-splitting on re-execution
-        local exec_args=("--_confirmed")
+        local exec_args=("--_confirmed" "-u" "${target_user}")
         [[ "${MODE_AUTO}" == true ]] && exec_args+=("--auto")
         [[ "${MODE_REVERT}" == true ]] && exec_args+=("--revert")
 
