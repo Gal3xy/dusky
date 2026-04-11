@@ -31,8 +31,10 @@ POST_SCRIPT_DELAY=0
 
 INSTALL_SEQUENCE=(
 
+    "U | 003_network_connect.sh"
+
 # ------ CUSTOM PATH SCRIPTS -------
-#    "U | deploy_dotfiles.sh"
+    "U | deploy_dotfiles.sh"
 
 # ------ Setup SCRIPTS -------
 
