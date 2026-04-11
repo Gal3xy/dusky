@@ -45,8 +45,8 @@ done
 
 # 4. Sanity & Privilege Checks
 if [[ $EUID -ne 0 ]]; then
-   printf "%sERROR: This script must be run as root to clean / directory.%s\n" "$RED" "$RESET" >&2
-   exit 1
+   printf "%s[INFO] Root privileges required. Escalating via sudo...%s\n" "$YELLOW" "$RESET"
+   exec sudo bash "$0" "$@"
 fi
 
 # Critical safety net: Prevent accidental root wipe if variable is empty or spaces
@@ -91,7 +91,7 @@ main() {
     # List Scripts
     for item in "${artifacts[@]}"; do
         printf "  %s[FILE] %s%s\n" "$RED" "$item" "$RESET"
-    fi
+    done
 
     local user_choice=""
 
