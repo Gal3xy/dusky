@@ -21,6 +21,7 @@ declare -ra ISO_SEQUENCE=(
 
 declare -ra CHROOT_SEQUENCE=(
   "100_etc_skel.sh --auto"
+  "101_skel_files_precision_edit.sh --inject"
   "110_post_chroot.sh --auto"
   "115_tty_autologin.sh --auto"
   "120_mkintcpip_optimizer.sh | IGNORE"
