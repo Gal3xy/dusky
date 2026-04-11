@@ -27,9 +27,9 @@ declare -ar pkgs_aur=(
 #  "papirus-folders-git"
 # "fluent-icon-theme-git"
 
-# snapshot & limine
-  "limine-mkinitcpio-hook"
-  "limine-snapper-sync"
+#   snapshot & limine
+#  "limine-mkinitcpio-hook"
+#  "limine-snapper-sync"
 )
 
 

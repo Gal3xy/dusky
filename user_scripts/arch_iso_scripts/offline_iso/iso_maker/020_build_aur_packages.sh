@@ -46,8 +46,9 @@ declare -a AUR_PACKAGES=(
     'tray-tui'
     'wifitui-bin'
     'xdg-terminal-exec'
-    'limine-mkinitcpio-hook'
-    'limine-snapper-sync'
+    'paru'
+#    'limine-mkinitcpio-hook'
+#    'limine-snapper-sync'
 )
 
 # ==============================================================================
