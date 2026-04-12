@@ -44,6 +44,50 @@ if [[ $EUID -eq 0 ]]; then
     log_error "This script must NOT be run as root. It modifies user configs and uses AUR helpers."
 fi
 
+# ==============================================================================
+#  Phase 0: User Consent & State Logic
+# ==============================================================================
+
+# 1. Check for --auto flag
+_auto_mode="false"
+for _arg in "$@"; do
+    if [[ "$_arg" == "--auto" ]]; then
+        _auto_mode="true"
+        break
+    fi
+done
+
+# 2. Define State File
+readonly STATE_FILE="$HOME/.config/dusky/settings/vesktop_matugen"
+
+# 3. Logic Flow
+if [[ "$_auto_mode" == "false" ]]; then
+    if [[ -f "$STATE_FILE" ]]; then
+        _state=$(<"$STATE_FILE")
+        if [[ "$_state" == "declined" ]]; then
+            log_info "Vesktop installation previously declined (found 'declined' in $STATE_FILE). Skipping."
+            exit 0
+        fi
+        # If 'accepted', proceed normally
+    else
+        # Prompt the user
+        printf '%s[?]%s Do you want to install Vesktop? (A Discord client with beautiful Matugen theming and a lot better than the official Discord client with additional features) [Y/n] ' "$YELLOW" "$NC"
+        read -r -n 1 _response
+        printf '\n' # Fix formatting after read
+
+        mkdir -p -- "${STATE_FILE%/*}"
+
+        if [[ "$_response" =~ ^[Nn]$ ]]; then
+            printf 'declined' > "$STATE_FILE"
+            log_info "Vesktop installation declined. State saved. Exiting."
+            exit 0
+        else
+            printf 'accepted' > "$STATE_FILE"
+            log_success "Vesktop installation accepted. Proceeding..."
+        fi
+    fi
+fi
+
 # --- Detect AUR Helper ---
 AUR_HELPER=""
 if command -v paru &>/dev/null; then
@@ -94,8 +138,12 @@ read -r -d '' VESKTOP_BLOCK << 'TOML' || true
 input_path  = '~/.config/matugen/templates/midnight-discord.css'
 output_path = '~/.config/matugen/generated/midnight-discord.css'
 post_hook   = '''
-mkdir -p -- "$HOME/.config/vesktop/themes/"
-ln -nfs -- "$HOME/.config/matugen/generated/midnight-discord.css" "$HOME/.config/vesktop/themes/midnight-discord.css"
+bash -c '
+{
+  mkdir -p "$HOME/.config/vesktop/themes/"
+  ln -nfs "$HOME/.config/matugen/generated/midnight-discord.css" "$HOME/.config/vesktop/themes/midnight-discord.css"
+} >/dev/null 2>&1 </dev/null & disown
+'
 '''
 TOML
 readonly VESKTOP_BLOCK

@@ -64,9 +64,9 @@
     // ===================================================================
     "custom/launcher": {
         "format": "󰣇",
-        "tooltip-format": "App Launcher\n\nLMB: Application Menu\nRMB: Run Command",
-        "on-click": "uwsm-app -- rofi -show drun",
-        "on-click-right": "uwsm-app -- rofi -show run"
+        "tooltip-format": "App Launcher\n\nLMB: Control Center\nRMB: Application Launcher",
+        "on-click-right": "uwsm-app -- rofi -show drun",
+        "on-click": "python3 ~/user_scripts/dusky_system/control_center/dusky_control_center.py"
     },
 
     "hyprland/workspaces": {
@@ -140,7 +140,7 @@
     // CENTER MODULES
     // ===================================================================
     "clock": {
-        "format": " {:%I:%M %p}",
+        "format": "{:%I:%M %p}",
         "format-alt": " {:%A, %d %B %Y  •  %I:%M:%S %p}",
         "tooltip-format": "<big>{:%A, %d %B %Y}</big>\n<tt><small>{calendar}</small></tt>",
     //    "timezone": "Asia/Kolkata",
@@ -236,8 +236,8 @@
         "format": "{icon} {percent}%",
         "format-icons": ["󰃞", "󰃟", "󰃠"],
         "tooltip-format": "Brightness: {percent}%\n\nLMB: Brightness Slider\nRMB: Hyprsunset Slider\nMMB: Shader Menu\nScroll: Adjust",
-        "on-click": "uwsm-app -- ~/user_scripts/sliders/brightness_slider.sh",
-        "on-click-right": "uwsm-app -- ~/user_scripts/sliders/hyprsunset_slider.sh",
+        "on-click": "uwsm-app -- ~/user_scripts/sliders/dusky_sliders.py",
+        "on-click-right": "uwsm-app -- ~/user_scripts/sliders/dusky_sliders.py",
         "on-click-middle": "uwsm-app -- ~/user_scripts/rofi/shader_menu.sh",
         "on-scroll-up": "swayosd-client --brightness raise",
         "on-scroll-down": "swayosd-client --brightness lower",
@@ -317,7 +317,7 @@
             "critical": 15
         },
         "tooltip-format": "{timeTo}\nHealth: {health}%\nPower Draw: {power:.2f} W\nCycles: {cycles}\n\nLMB: Toggle Format\nRMB: Timeout Settings",
-        "on-click-right": "uwsm-app -- kitty --class timeout.sh -e $HOME/user_scripts/hypridle/timeout.sh"
+        "on-click-right": "uwsm-app -- kitty --class dusky_hypridle.sh -e $HOME/user_scripts/hypridle/dusky_hypridle.sh"
     },
 
     // ===================================================================

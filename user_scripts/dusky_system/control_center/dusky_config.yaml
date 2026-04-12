@@ -11,39 +11,37 @@ pages:
       properties:
         title: Bluetooth
         icon: bluetooth-active-symbolic
-        state_command: "bluetoothctl show | grep 'Powered: yes' | awk '{print $2}'"
+        state_command: "rfkill list bluetooth | grep -q 'Soft blocked: no' && echo yes"
         interval: 5
       on_toggle:
         enabled:
           type: exec
-          command: bluetoothctl power on && notify-send 'Bluetooth' 'Bluetooth Turned ON'
+          command: rfkill unblock bluetooth && notify-send 'Bluetooth' 'Bluetooth Turned ON'
           terminal: false
         disabled:
           type: exec
-          command: bluetoothctl power off && notify-send 'Bluetooth' 'Bluetooth Turned OFF'
+          command: rfkill block bluetooth && notify-send 'Bluetooth' 'Bluetooth Turned OFF'
           terminal: false
     - type: toggle_card
       properties:
         title: Wi-Fi
         icon: network-wireless-symbolic
-        state_command: nmcli radio wifi
+        state_command: "rfkill list wifi | grep -q 'Soft blocked: no' && echo yes"
         interval: 5
       on_toggle:
         enabled:
           type: exec
-          command: nmcli radio wifi on && notify-send 'Wi-Fi' 'Wireless Radio Turned ON'
+          command: rfkill unblock wifi && notify-send 'Wi-Fi' 'Wireless Radio Turned ON'
           terminal: false
         disabled:
           type: exec
-          command: nmcli radio wifi off && notify-send 'Wi-Fi' 'Wireless Radio Turned OFF'
+          command: rfkill block wifi && notify-send 'Wi-Fi' 'Wireless Radio Turned OFF'
           terminal: false
     - type: toggle_card
       properties:
         title: Dark Mode
         icon: weather-clear-night-symbolic
         key: dusky_theme/state
-        key_inverse: true
-        save_as_int: true
       on_toggle:
         enabled:
           type: exec
@@ -53,7 +51,7 @@ pages:
           type: exec
           command: $HOME/user_scripts/theme_matugen/theme_ctl.sh set --mode light
           terminal: false
-    - type: button
+    - type: grid_card
       properties:
         title: Reload CC
         icon: system-reboot-symbolic
@@ -62,17 +60,23 @@ pages:
         type: exec
         command: $HOME/user_scripts/dusky_system/reload_cc/cc_restart.sh
         terminal: false
-    - type: button
+    - type: grid_card
       properties:
         title: Dusky
-        icon: system-software-update-symbolic
-        style: suggested
+        icon: software-update-available-symbolic
         badge_file: ~/.config/dusky/settings/dusky_update_behind_commit
+        button_text_file: ~/.config/dusky/settings/dusky_update_behind_commit
+        button_text_map:
+          "0": "Updated"
+          "default": "Available"
+        style_map:
+          "0": "default"
+          "default": "suggested"
       on_press:
         type: exec
         command: kitty --class update_dusky.sh --title "System Updater" --hold sh -c "$HOME/user_scripts/update_dusky/update_dusky.sh"
         terminal: false
-    - type: button
+    - type: grid_card
       properties:
         title: Power
         icon: system-log-out-symbolic
@@ -93,16 +97,26 @@ pages:
         title: Active Profile
         description: Select performance mode
         icon: power-profile-balanced-symbolic
+        value_command: "tlpctl get"
+        interval: 2
         options:
         - Balanced
         - Performance
         - Power Saver
-        value_command: "tlpctl get | sed 's/balanced/Balanced/;s/performance/Performance/;s/power-saver/Power Saver/'"
-        interval: 5
+        options_map:
+          "balanced": "Balanced"
+          "performance": "Performance"
+          "power-saver": "Power Saver"
       on_change:
-        type: exec
-        command: "tlpctl $(echo '{value}' | tr '[:upper:]' '[:lower:]' | sed 's/ /-/g') && notify-send 'Power Profile' 'Switched to {value}'"
-
+        Balanced:
+          type: exec
+          command: tlpctl balanced && notify-send 'Power Profile' 'Switched to Balanced'
+        Performance:
+          type: exec
+          command: tlpctl performance && notify-send 'Power Profile' 'Switched to Performance'
+        Power Saver:
+          type: exec
+          command: tlpctl power-saver && notify-send 'Power Profile' 'Switched to Power Saver'
   - type: section
     properties:
       title: Quick Controls
@@ -156,8 +170,8 @@ pages:
         title: Memory Used
         interval: 5
       value:
-        type: exec
-        command: free -h | awk '/^Mem:/ {print $3}'
+        type: system
+        key: memory_used
 
 - id: system
   title: System
@@ -218,32 +232,178 @@ pages:
         command: kitty --class ORCHESTRA.sh --hold sh -c $HOME/user_scripts/arch_setup_scripts/ORCHESTRA.sh
         terminal: false
 
+
   - type: section
     properties:
-      title: Git Backup
+      title: System Recovery & Backup
       icon: ''
       description: ''
     items:
-    - type: button
+    - type: navigation
       properties:
-        title: Setup New Repo
-        description: Initialize a new GitHub repository for dotfiles
-        icon: folder-new-symbolic
-        button_text: "Setup"
-      on_press:
-        type: exec
-        command: kitty --class new_github_repo_to_backup.sh --hold sh -c "$HOME/user_scripts/desktop_apps/new_github_repo_to_backup.sh"
-        terminal: false
-    - type: button
-      properties:
-        title: Reconnect Repo
-        description: Reconnect and push local changes to remote
-        icon: network-server-symbolic
-        button_text: "Reconnect"
-      on_press:
-        type: exec
-        command: kitty --class reconnect_and_push_new_changes_to_github.sh --hold sh -c "$HOME/user_scripts/desktop_apps/reconnect_and_push_new_changes_to_github.sh"
-        terminal: false
+        title: Btrfs Snapshot Manager
+        description: Create and restore system and data states
+        icon: document-revert-symbolic
+      layout:
+        - type: section
+          properties:
+            title: Create Snapshots
+            description: Type a description and hit Create.
+          items:
+            - type: entry
+              properties:
+                title: "Create Combined Snapshot"
+                description: "Takes a synced snapshot of both Root and Home."
+                icon: camera-photo-symbolic
+                button_text: "Create"
+              on_action:
+                type: exec
+                # Executes both sequentially. The Python script will inject the quoted description into {value}.
+                command: "sudo ~/user_scripts/btrfs_snapshots/cc/04_dusky_snapshot_manager.py -c root -C {value} && sudo ~/user_scripts/btrfs_snapshots/cc/04_dusky_snapshot_manager.py -c home -C {value}"
+            - type: entry
+              properties:
+                title: "Create Root Snapshot"
+                description: "Takes a snapshot of the root filesystem only."
+                icon: drive-harddisk-system-symbolic
+                button_text: "Create"
+              on_action:
+                type: exec
+                command: "sudo ~/user_scripts/btrfs_snapshots/cc/04_dusky_snapshot_manager.py -c root -C {value}"
+            - type: entry
+              properties:
+                title: "Create Home Snapshot"
+                description: "Takes a snapshot of your personal data only."
+                icon: user-home-symbolic
+                button_text: "Create"
+              on_action:
+                type: exec
+                command: "sudo ~/user_scripts/btrfs_snapshots/cc/04_dusky_snapshot_manager.py -c home -C {value}"
+
+        - type: section
+          properties:
+            title: Full System Recovery
+            description: Safest option. Reverts Root and Home simultaneously to keep configs and data synced.
+          items:
+            - type: async_selector
+              properties:
+                title: "Combined Recovery (Root + Home)"
+                description: "Select an exact timestamp. Requires immediate reboot."
+                icon: system-reboot-symbolic
+                list_command: "sudo ~/user_scripts/btrfs_snapshots/cc/04_dusky_snapshot_manager.py -c root -l --json"
+                display_template: "[{date}] {description}"
+                button_text: "Restore Both"
+                style: "destructive"
+                sort: "reverse"
+                auto_refresh: true
+                display_max_length: 45
+              on_action:
+                type: "exec"
+                command: "sudo ~/user_scripts/btrfs_snapshots/cc/bash_wrapper_for_restore.sh '{raw_date}' '{description}'"
+
+        - type: section
+          properties:
+            title: Advanced Recovery (Partial)
+            description: Revert specific subvolumes individually.
+          items:
+            - type: async_selector
+              properties:
+                title: "System Recovery (Root Only)"
+                description: "Revert pacman updates or system configs. Requires reboot."
+                icon: drive-harddisk-system-symbolic
+                list_command: "sudo ~/user_scripts/btrfs_snapshots/cc/04_dusky_snapshot_manager.py -c root -l --json"
+                display_template: "[{id}] {date} | {description}"
+                button_text: "Restore Root"
+                style: "destructive"
+                sort: "reverse"
+                auto_refresh: true
+                display_max_length: 45
+              on_action:
+                type: "exec"
+                command: "sudo ~/user_scripts/btrfs_snapshots/cc/04_dusky_snapshot_manager.py -c root -R {id}"
+            - type: async_selector
+              properties:
+                title: "Data Recovery (Home Only)"
+                description: "Revert personal files. Hot-reloads instantly (no reboot)."
+                icon: user-home-symbolic
+                list_command: "sudo ~/user_scripts/btrfs_snapshots/cc/04_dusky_snapshot_manager.py -c home -l --json"
+                display_template: "[{id}] {date} | {description}"
+                button_text: "Restore Home"
+                style: "suggested"
+                sort: "reverse"
+                auto_refresh: true
+                display_max_length: 45
+              on_action:
+                type: "exec"
+                command: "sudo ~/user_scripts/btrfs_snapshots/cc/04_dusky_snapshot_manager.py -c home -R {id}"
+
+        - type: section
+          properties:
+            title: Snapshot Cleanup
+            description: Safely remove old or unneeded states.
+          items:
+            - type: async_selector
+              properties:
+                title: "Delete Combined Snapshot (Root + Home)"
+                description: "Removes both synchronized states."
+                icon: edit-delete-symbolic
+                list_command: "sudo ~/user_scripts/btrfs_snapshots/cc/04_dusky_snapshot_manager.py -c root -l --json"
+                display_template: "[{date}] {description}"
+                button_text: "Delete Both"
+                style: "destructive"
+                sort: "reverse"
+                auto_refresh: true
+                display_max_length: 45
+              on_action:
+                type: "exec"
+                command: "sudo ~/user_scripts/btrfs_snapshots/cc/bash_wrapper_for_delete.sh '{raw_date}' '{description}'"
+
+            - type: async_selector
+              properties:
+                title: "Delete System Snapshot (Root Only)"
+                description: "Removes a specific system state."
+                icon: drive-harddisk-system-symbolic
+                list_command: "sudo ~/user_scripts/btrfs_snapshots/cc/04_dusky_snapshot_manager.py -c root -l --json"
+                display_template: "[{id}] {date} | {description}"
+                button_text: "Delete Root"
+                style: "destructive"
+                sort: "reverse"
+                auto_refresh: true
+                display_max_length: 45
+              on_action:
+                type: "exec"
+                command: "sudo ~/user_scripts/btrfs_snapshots/cc/04_dusky_snapshot_manager.py -c root -D {id}"
+
+            - type: async_selector
+              properties:
+                title: "Delete Data Snapshot (Home Only)"
+                description: "Removes a specific personal data state."
+                icon: user-home-symbolic
+                list_command: "sudo ~/user_scripts/btrfs_snapshots/cc/04_dusky_snapshot_manager.py -c home -l --json"
+                display_template: "[{id}] {date} | {description}"
+                button_text: "Delete Home"
+                style: "destructive"
+                sort: "reverse"
+                auto_refresh: true
+                display_max_length: 45
+              on_action:
+                type: "exec"
+                command: "sudo ~/user_scripts/btrfs_snapshots/cc/04_dusky_snapshot_manager.py -c home -D {id}"
+
+        - type: section
+          properties:
+            title: Setup
+            description: Configure BTRFS subvolumes
+          items:
+            - type: button
+              properties:
+                title: BTRFS Sub-volume Setup
+                description: Configure limine, snapper isolation, and pacman hooks
+                icon: preferences-system-symbolic
+                button_text: "Open"
+              on_press:
+                type: redirect
+                page: setup_features
+                subpage: BTRFS Sub-volume Setup
 
   - type: section
     properties:
@@ -251,53 +411,153 @@ pages:
       icon: ''
       description: ''
     items:
-    - type: button
+    - type: navigation
       properties:
-        title: Dusky Updater
-        description: Update Dusky specific configuration files
-        icon: system-software-update-symbolic
-        badge_file: ~/.config/dusky/settings/dusky_update_behind_commit
-        button_text_file: ~/.config/dusky/settings/dusky_update_behind_commit
-        button_text_map:
-          "0": "Updated"
-          "default": "Available"
-        style_map:
-          "0": "normal"
-          "default": "suggested"
-      on_press:
-        type: exec
-        command: kitty --class update_dusky.sh --title "System Updater" --hold sh -c "$HOME/user_scripts/update_dusky/update_dusky.sh"
-        terminal: false
-    - type: button
+        title: System Updates & Logs
+        description: Update system and manage backups
+        icon: folder-download-symbolic
+      layout:
+        - type: section
+          properties:
+            title: System Updates
+          items:
+          - type: button
+            properties:
+              title: Dusky Updater
+              description: Update Dusky specific configuration files
+              icon: software-update-available-symbolic
+              badge_file: ~/.config/dusky/settings/dusky_update_behind_commit
+              button_text_file: ~/.config/dusky/settings/dusky_update_behind_commit
+              button_text_map:
+                "0": "Updated"
+                "default": "Available"
+              style_map:
+                "0": "normal"
+                "default": "suggested"
+            on_press:
+              type: exec
+              command: kitty --class update_dusky.sh --title "System Updater" --hold sh -c "$HOME/user_scripts/update_dusky/update_dusky.sh"
+              terminal: false
+          - type: button
+            properties:
+              title: Arch Updater
+              description: Pacman and AUR packages update
+              icon: folder-download-symbolic
+              button_text: "Update"
+            on_press:
+              type: exec
+              command: kitty --class arch_update --title "Arch Linux Updater" --hold sh -c "paru -Syu"
+              terminal: false
+
+        - type: section
+          properties:
+            title: Backups & Logs
+          items:
+          - type: button
+            properties:
+              title: View Backups
+              description: Browse ~/Documents/dusky_backups/
+              icon: edit-copy-symbolic
+              buttons:
+                - icon: utilities-terminal-symbolic
+                  button_text: "Yazi"
+                  on_press:
+                    type: exec
+                    command: kitty --class yazi --title "Backup Viewer" --hold sh -c "yazi $HOME/Documents/dusky_backups/"
+                - icon: system-file-manager-symbolic
+                  button_text: "nemo"
+                  style: suggested
+                  on_press:
+                    type: exec
+                    command: nemo "$HOME/Documents/dusky_backups/"
+          - type: button
+            properties:
+              title: Send Logs
+              description: Generate system logs and copy link to clipboard
+              icon: mail-send-symbolic
+              button_text: "Send"
+            on_press:
+              type: exec
+              command: kitty --class send_logs.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/send_logs.sh"
+              terminal: false
+  - type: section
+    properties:
+      title: Session Management
+      icon: system-users-symbolic
+      description: Manage user session and login behavior
+    items:
+    - type: toggle
       properties:
-        title: Arch Updater
-        description: Pacman and AUR packages update
-        icon: system-software-update-symbolic
-        button_text: "Update"
-      on_press:
-        type: exec
-        command: kitty --class arch_update --title "Arch Linux Updater" --hold sh -c "paru -Syu"
-        terminal: false
-    - type: button
+        title: TTY Auto Login
+        description: Automatically login to TTY1 on boot
+        icon: avatar-default-symbolic
+        key: auto_login_tty
+      on_toggle:
+        enabled:
+          type: exec
+          command: kitty --class 285_tty_autologin.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/285_tty_autologin.sh --auto"
+          terminal: false
+        disabled:
+          type: exec
+          command: kitty --class 285_tty_autologin.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/285_tty_autologin.sh --revert --auto"
+          terminal: false
+
+  - type: section
+    properties:
+      title: Git Backup
+      icon: ''
+      description: ''
+    items:
+    - type: navigation
       properties:
-        title: Restore Backup
-        description: Revert to stash generated by updater
-        icon: edit-undo-symbolic
-        button_text: "Restore"
-      on_press:
-        type: exec
-        command: kitty --class restore_stash.sh --hold sh -c $HOME/user_scripts/update_dusky/restore_stash.sh
-        terminal: false
-    - type: button
-      properties:
-        title: Send Logs
-        description: Generate system logs and copy link to clipboard
-        icon: edit-copy-symbolic
-        button_text: "Send"
-      on_press:
-        type: exec
-        command: kitty --class send_logs.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/send_logs.sh"
-        terminal: false
+        title: Git Configuration & Backup
+        description: Manage dotfiles repository
+        icon: network-server-symbolic
+      layout:
+        - type: section
+          properties:
+            title: Configuration
+            icon: ''
+            description: ''
+          items:
+          - type: button
+            properties:
+              title: 'Step 1: Git Config'
+              description: Configure global git user/email
+              icon: preferences-system-symbolic
+              button_text: "Config"
+            on_press:
+              type: exec
+              command: kitty --class 300_git_config.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/300_git_config.sh"
+              terminal: false
+
+        - type: section
+          properties:
+            title: Repository Setup
+            icon: ''
+            description: ''
+          items:
+          - type: button
+            properties:
+              title: 'Step 2: Setup New Repo'
+              description: Initialize a new GitHub repository
+              icon: folder-new-symbolic
+              button_text: "Setup"
+            on_press:
+              type: exec
+              command: kitty --class 305_new_github_repo_to_backup.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/305_new_github_repo_to_backup.sh"
+              terminal: false
+          - type: button
+            properties:
+              title: 'Step 2: Reconnect Repo'
+              description: Reconnect and push to existing remote
+              icon: network-transmit-receive-symbolic
+              button_text: "Reconnect"
+            on_press:
+              type: exec
+              command: kitty --class 310_reconnect_and_push_new_changes_to_github.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/310_reconnect_and_push_new_changes_to_github.sh"
+              terminal: false
+
 
 - id: disk_and_files
   title: Disk & Files
@@ -353,7 +613,7 @@ pages:
         button_text: "Purge"
       on_press:
         type: exec
-        command: kitty --class cache_purge.sh --hold sh -c "$HOME/user_scripts/desktop_apps/cache_purge.sh"
+        command: kitty --class 365_cache_purge.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/365_cache_purge.sh"
         terminal: false
     - type: button
       properties:
@@ -365,16 +625,25 @@ pages:
         type: exec
         command: kitty --class ntfs_fix.sh --hold sh -c $HOME/user_scripts/drives/ntfs_fix.sh
         terminal: false
-    - type: button
+    - type: selection
       properties:
         title: File Manager Switch
-        description: 'Choose Default: Thunar (GUI) vs Yazi (TUI)'
+        description: 'Choose Default: Nemo (GUI) vs Yazi (TUI)'
         icon: system-file-manager-symbolic
-        button_text: "Switch"
-      on_press:
-        type: exec
-        command: kitty --class file_manager_switch.sh --hold sh -c $HOME/user_scripts/desktop_apps/file_manager_switch.sh
-        terminal: false
+        key: filemanager_switch
+        options:
+          - Yazi
+          - Nemo
+        options_map:
+          "false": "Nemo"
+          "true": "Yazi"
+      on_change:
+        Yazi:
+          type: exec
+          command: "$HOME/user_scripts/arch_setup_scripts/scripts/235_file_manager_switch.sh --yazi"
+        Nemo:
+          type: exec
+          command: "$HOME/user_scripts/arch_setup_scripts/scripts/235_file_manager_switch.sh --nemo"
   - type: section
     properties:
       title: File Transfer (FTP)
@@ -389,7 +658,7 @@ pages:
         button_text: "Setup"
       on_press:
         type: exec
-        command: kitty --class ftp_setup_arch.sh --hold sh -c $HOME/user_scripts/ftp/ftp_setup_arch.sh
+        command: kitty --class 250_ftp_arch.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/250_ftp_arch.sh"
         terminal: false
     - type: button
       properties:
@@ -426,33 +695,33 @@ pages:
           terminal: false
     - type: toggle_card
       properties:
-        title: Wi-Fi
-        icon: network-wireless-symbolic
-        state_command: nmcli radio wifi
+        title: Bluetooth
+        icon: bluetooth-active-symbolic
+        state_command: "rfkill list bluetooth | grep -q 'Soft blocked: no' && echo yes"
         interval: 5
       on_toggle:
         enabled:
           type: exec
-          command: kitty --class wifitui --title "Wi-Fi Manager" --hold sh -c "wifitui"
+          command: rfkill unblock bluetooth && notify-send 'Bluetooth' 'Bluetooth Turned ON'
           terminal: false
         disabled:
           type: exec
-          command: kitty --class wifitui --title "Wi-Fi Manager" --hold sh -c "wifitui"
+          command: rfkill block bluetooth && notify-send 'Bluetooth' 'Bluetooth Turned OFF'
           terminal: false
     - type: toggle_card
       properties:
-        title: Bluetooth
-        icon: bluetooth-active-symbolic
-        state_command: "bluetoothctl show | grep 'Powered: yes' | awk '{print $2}'"
+        title: Wi-Fi
+        icon: network-wireless-symbolic
+        state_command: "rfkill list wifi | grep -q 'Soft blocked: no' && echo yes"
         interval: 5
       on_toggle:
         enabled:
           type: exec
-          command: kitty --class bluetui --title "Bluetooth Manager" --hold sh -c "bluetui"
+          command: rfkill unblock wifi && notify-send 'Wi-Fi' 'Wireless Radio Turned ON'
           terminal: false
         disabled:
           type: exec
-          command: kitty --class bluetui --title "Bluetooth Manager" --hold sh -c "bluetui"
+          command: rfkill block wifi && notify-send 'Wi-Fi' 'Wireless Radio Turned OFF'
           terminal: false
 
   - type: section
@@ -463,23 +732,23 @@ pages:
     items:
     - type: button
       properties:
-        title: 'Step 1: Setup OpenSSH'
-        description: Configure SSH keys and service
-        icon: system-lock-screen-symbolic
-        button_text: "Setup"
-      on_press:
-        type: exec
-        command: kitty --class 02_openssh_setup.sh --hold sh -c $HOME/user_scripts/networking/02_openssh_setup.sh
-        terminal: false
-    - type: button
-      properties:
-        title: 'Step 2: Tailscale Setup'
+        title: 'Step 1: Tailscale Setup'
         description: Configure mesh VPN
         icon: network-vpn-symbolic
         button_text: "Setup"
       on_press:
         type: exec
         command: kitty --class tailscale_setup --hold sh -c "$HOME/user_scripts/networking/01_tailscale_setup.sh"
+        terminal: false
+    - type: button
+      properties:
+        title: 'Step 2: Setup OpenSSH'
+        description: Configure SSH keys and service
+        icon: system-lock-screen-symbolic
+        button_text: "Setup"
+      on_press:
+        type: exec
+        command: kitty --class 02_openssh_setup.sh --hold sh -c $HOME/user_scripts/networking/02_openssh_setup.sh
         terminal: false
     - type: button
       properties:
@@ -518,7 +787,22 @@ pages:
         type: exec
         command: kitty --class airmon_ng.sh --hold sh -c ~/user_scripts/networking/airmon_ng.sh
         terminal: false
-
+  - type: section
+    properties:
+      title: Hosts File
+      icon: ''
+      description: ''
+    items:
+    - type: button
+      properties:
+        title: Brain Rot Block
+        description: Blocks social media sites
+        icon: security-high-symbolic
+        button_text: "Block"
+      on_press:
+        type: exec
+        command: kitty --class 325_hosts_files_block.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/325_hosts_files_block.sh"
+        terminal: false
 - id: hardware
   title: Hardware
   icon: input-keyboard-symbolic
@@ -534,15 +818,26 @@ pages:
         title: Active Profile
         description: Select performance mode
         icon: power-profile-balanced-symbolic
+        value_command: "tlpctl get"
+        interval: 2
         options:
         - Balanced
         - Performance
         - Power Saver
-        value_command: "tlpctl get | sed 's/balanced/Balanced/;s/performance/Performance/;s/power-saver/Power Saver/'"
-        interval: 5
+        options_map:
+          "balanced": "Balanced"
+          "performance": "Performance"
+          "power-saver": "Power Saver"
       on_change:
-        type: exec
-        command: "tlpctl $(echo '{value}' | tr '[:upper:]' '[:lower:]' | sed 's/ /-/g') && notify-send 'Power Profile' 'Switched to {value}'"
+        Balanced:
+          type: exec
+          command: tlpctl balanced && notify-send 'Power Profile' 'Switched to Balanced'
+        Performance:
+          type: exec
+          command: tlpctl performance && notify-send 'Power Profile' 'Switched to Performance'
+        Power Saver:
+          type: exec
+          command: tlpctl power-saver && notify-send 'Power Profile' 'Switched to Power Saver'
     - type: toggle
       properties:
         title: Dusky Power Saver
@@ -585,11 +880,11 @@ pages:
       on_toggle:
         enabled:
           type: exec
-          command: $HOME/user_scripts/desktop_apps/mouse_button_reverse.sh --left
+          command: $HOME/user_scripts/arch_setup_scripts/scripts/265_mouse_button_reverse.sh --left
           terminal: false
         disabled:
           type: exec
-          command: $HOME/user_scripts/desktop_apps/mouse_button_reverse.sh --right
+          command: $HOME/user_scripts/arch_setup_scripts/scripts/265_mouse_button_reverse.sh --right
           terminal: false
 
 - id: display
@@ -640,7 +935,7 @@ pages:
         button_text: "Open"
       on_press:
         type: exec
-        command: $HOME/user_scripts/sliders/hyprsunset_slider.sh
+        command: $HOME/user_scripts/sliders/dusky_sliders.py
         terminal: false
   - type: section
     properties:
@@ -669,12 +964,12 @@ pages:
             button_text: "-"
             on_press:
               type: exec
-              command: $HOME/user_scripts/hypr/adjust_scale.sh -
+              command: $HOME/user_scripts/hypr/adjust_scale.py -
           - icon: list-add-symbolic
             button_text: "+"
             on_press:
               type: exec
-              command: $HOME/user_scripts/hypr/adjust_scale.sh +
+              command: $HOME/user_scripts/hypr/adjust_scale.py +
 
 - id: audio
   title: Audio
@@ -692,11 +987,11 @@ pages:
       on_toggle:
         enabled:
           type: exec
-          command: $HOME/user_scripts/audio/mono_audio_pipewire.sh
+          command: $HOME/user_scripts/audio/mono_audio_pipewire.py
           terminal: false
         disabled:
           type: exec
-          command: $HOME/user_scripts/audio/mono_audio_pipewire.sh
+          command: $HOME/user_scripts/audio/mono_audio_pipewire.py
           terminal: false
     - type: grid_card
       properties:
@@ -714,11 +1009,11 @@ pages:
       on_toggle:
         enabled:
           type: exec
-          command: $HOME/user_scripts/wayclick/wayclick.sh
+          command: $HOME/user_scripts/wayclick/dusky_wayclick.sh
           terminal: false
         disabled:
           type: exec
-          command: $HOME/user_scripts/wayclick/wayclick.sh
+          command: $HOME/user_scripts/wayclick/dusky_wayclick.sh
           terminal: false
 
   - type: section
@@ -791,8 +1086,6 @@ pages:
         title: Dark Mode
         icon: weather-clear-night-symbolic
         key: dusky_theme/state
-        key_inverse: true
-        save_as_int: true
       on_toggle:
         enabled:
           type: exec
@@ -802,6 +1095,14 @@ pages:
           type: exec
           command: $HOME/user_scripts/theme_matugen/theme_ctl.sh set --mode light
           terminal: false
+    - type: grid_card
+      properties:
+        title: Presets
+        icon: view-grid-symbolic
+      on_press:
+        type: exec
+        command: kitty --class dusky_matugen_presets.sh -e ~/user_scripts/theme_matugen/dusky_matugen_presets.sh
+        terminal: false
     - type: toggle_card
       properties:
         title: Blur
@@ -816,110 +1117,124 @@ pages:
           type: exec
           command: $HOME/user_scripts/hypr/hypr_blur_opacity_shadow_toggle.sh
           terminal: false
-    - type: grid_card
-      properties:
-        title: Cycle Theme
-        icon: palette-symbolic
-      on_press:
-        type: exec
-        command: $HOME/user_scripts/theme_matugen/theme_ctl.sh random
-        terminal: false
 
   - type: section
     properties:
-      title: Theming
+      title: Visual Configuration
       icon: ''
       description: ''
     items:
-    - type: button
+    - type: navigation
       properties:
-        title: Regenerate Color Files
-        description: Refresh Matugen for current wallpaper
-        icon: view-refresh-symbolic
-        button_text: "Refresh"
-      on_press:
-        type: exec
-        command: $HOME/user_scripts/theme_matugen/theme_ctl.sh refresh
-        terminal: false
-    - type: button
+        title: Theme & Colors
+        description: Color schemes and generation
+        icon: palette-symbolic
+      layout:
+        - type: section
+          properties:
+            title: Theme Management
+          items:
+            - type: button
+              properties:
+                title: Cycle Theme
+                description: Randomize colors from wallpaper
+                icon: palette-symbolic
+              on_press:
+                type: exec
+                command: $HOME/user_scripts/theme_matugen/theme_ctl.sh next
+                terminal: false
+            - type: button
+              properties:
+                title: Regenerate Color Files
+                description: Refresh Matugen for current wallpaper
+                icon: view-refresh-symbolic
+                button_text: "Refresh"
+              on_press:
+                type: exec
+                command: $HOME/user_scripts/theme_matugen/theme_ctl.sh refresh
+                terminal: false
+            - type: button
+              properties:
+                title: Fine Tune
+                description: Open Rofi theme configuration
+                icon: emblem-photos-symbolic
+                button_text: "Open"
+              on_press:
+                type: exec
+                command: $HOME/user_scripts/rofi/rofi_theme.sh
+                terminal: false
+
+    - type: navigation
       properties:
-        title: Fine Tune
-        description: Open Rofi theme configuration
-        icon: emblem-photos-symbolic
-        button_text: "Open"
-      on_press:
-        type: exec
-        command: $HOME/user_scripts/rofi/rofi_theme.sh
-        terminal: false
-  - type: section
-    properties:
-      title: Wallpaper
-      icon: ''
-      description: ''
-    items:
-    - type: button
-      properties:
-        title: Waypaper
-        description: GUI Wallpaper Picker
+        title: Wallpaper
+        description: Background image settings
         icon: image-x-generic-symbolic
-        button_text: "Open"
-      on_press:
-        type: exec
-        command: waypaper
-        terminal: false
-    - type: button
+      layout:
+        - type: section
+          properties:
+            title: Wallpaper Management
+          items:
+            - type: button
+              properties:
+                title: Waypaper
+                description: GUI Wallpaper Picker
+                icon: image-x-generic-symbolic
+                button_text: "Open"
+              on_press:
+                type: exec
+                command: waypaper
+                terminal: false
+            - type: button
+              properties:
+                title: Rofi Wallpaper
+                description: Quick Select Menu
+                icon: image-x-generic-symbolic
+                button_text: "Select"
+              on_press:
+                type: exec
+                command: $HOME/user_scripts/rofi/rofi_wallpaper_selctor.sh
+                terminal: false
+
+    - type: navigation
       properties:
-        title: Rofi Wallpaper
-        description: Quick Select Menu
-        icon: image-x-generic-symbolic
-        button_text: "Select"
-      on_press:
-        type: exec
-        command: $HOME/user_scripts/rofi/rofi_wallpaper_selctor.sh
-        terminal: false
-  - type: section
-    properties:
-      title: Hyprland Eye Candy
-      icon: ''
-      description: ''
-    items:
-    - type: button
-      properties:
-        title: Dusky Appearance TUI
-        description: Configure borders, gaps, colors
+        title: Effects & Decorations
+        description: Animations, blur, borders, and shaders
         icon: preferences-desktop-display-symbolic
-        button_text: "Open"
-      on_press:
-        type: exec
-        command: kitty --class dusky_appearances.sh
-          --hold sh -c "$HOME/user_scripts/hypr/dusky_appearances.sh"
-        terminal: false
-    - type: button
-      properties:
-        title: Animation Presets
-        description: Select Hyprland window animation style
-        icon: media-playlist-shuffle-symbolic
-        button_text: "Select"
-      on_press:
-        type: exec
-        command: rofi -show animations -modi "animations:$HOME/user_scripts/rofi/hypr_anim.sh"
-        terminal: false
-  - type: section
-    properties:
-      title: Shaders
-      icon: ''
-      description: ''
-    items:
-    - type: button
-      properties:
-        title: Shaders
-        description: Screen effects menu
-        icon: applications-graphics-symbolic
-        button_text: "Open"
-      on_press:
-        type: exec
-        command: $HOME/user_scripts/rofi/shader_menu.sh
-        terminal: false
+      layout:
+        - type: section
+          properties:
+            title: Hyprland Appearance
+          items:
+            - type: button
+              properties:
+                title: Dusky Appearance TUI
+                description: Configure borders, gaps, colors
+                icon: preferences-desktop-display-symbolic
+                button_text: "Open"
+              on_press:
+                type: exec
+                command: kitty --class dusky_appearances.sh --hold sh -c "$HOME/user_scripts/hypr/dusky_appearances.sh"
+                terminal: false
+            - type: button
+              properties:
+                title: Animation Presets
+                description: Select Hyprland window animation style
+                icon: media-playlist-shuffle-symbolic
+                button_text: "Select"
+              on_press:
+                type: exec
+                command: rofi -show animations -modi "animations:$HOME/user_scripts/rofi/hypr_anim.sh"
+                terminal: false
+            - type: button
+              properties:
+                title: Shaders
+                description: Screen effects menu
+                icon: applications-graphics-symbolic
+                button_text: "Open"
+              on_press:
+                type: exec
+                command: $HOME/user_scripts/rofi/shader_menu.sh
+                terminal: false
 
 - id: components
   title: Components
@@ -933,26 +1248,124 @@ pages:
     items:
     - type: button
       properties:
+        title: GSettings & GTK
+        description: Manage GNOME/GTK settings via TUI or GUI
+        icon: input-mouse-symbolic
+        buttons:
+          - icon: text-x-script-symbolic
+            button_text: "Dconf"
+            on_press:
+              type: exec
+              command: dconf-editor
+          - icon: utilities-terminal-symbolic
+            button_text: "TUI"
+            style: suggested
+            on_press:
+              type: exec
+              command: kitty --class dusky_gsettings.sh --hold sh -c "$HOME/user_scripts/gtk/dusky_gsettings.sh"
+              terminal: false
+    - type: selection
+      properties:
         title: Clipboard Persistence
-        description: Configure clipboard history across reboots
+        description: Configure clipboard history storage
         icon: edit-paste-symbolic
-        button_text: "Setup"
-      on_press:
-        type: exec
-        command: kitty --class mouse_button_reverse.sh --hold sh -c $HOME/user_scripts/desktop_apps/clipboard_persistance.sh
-        terminal: false
+        key: clipboard_persistance
+        options:
+        - RAM
+        - Disk
+        options_map:
+          "false": "RAM"
+          "true": "Disk"
+      on_change:
+        RAM:
+          type: exec
+          command: kitty --class 390_clipboard_persistance.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/390_clipboard_persistance.sh --ram"
+          terminal: false
+        Disk:
+          type: exec
+          command: kitty --class 390_clipboard_persistance.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/390_clipboard_persistance.sh --disk"
+          terminal: false
+          
     - type: selection
       properties:
         title: Clipboard Style
         icon: edit-paste-symbolic
+        key: clipboard_state
         options:
         - Terminal
         - Rofi
-        value_command: "grep -q 'True' ~/.config/dusky/settings/clipboard_state 2>/dev/null && echo 'Terminal' || echo 'Rofi'"
-        interval: 5
+        options_map:
+          "False": "Rofi"
+          "True": "Terminal"
       on_change:
-        type: exec
-        command: "$HOME/user_scripts/desktop_apps/switch_clipboard.sh --$(echo '{value}' | tr '[:upper:]' '[:lower:]')"
+        Terminal:
+          type: exec
+          command: $HOME/user_scripts/arch_setup_scripts/scripts/460_switch_clipboard.sh --terminal
+          terminal: false
+        Rofi:
+          type: exec
+          command: $HOME/user_scripts/arch_setup_scripts/scripts/460_switch_clipboard.sh --rofi
+          terminal: false
+  - type: section
+    properties:
+      title: Memory & Optimization
+      icon: ''
+      description: ''
+    items:
+    - type: navigation
+      properties:
+        title: ZRam Configuration
+        description: Manage compressed memory swap
+        icon: memory-symbolic
+      layout:
+        - type: section
+          properties:
+            title: ZRam Setup
+          items:
+            - type: button
+              properties:
+                title: ZRam Configurator
+                icon: preferences-system-symbolic
+                button_text: "Setup"
+              on_press:
+                type: exec
+                command: kitty --class 205_zram_configuration.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/205_zram_configuration.sh"
+                terminal: false
+            - type: button
+              properties:
+                title: Optimize Swappiness
+                description: Uses more RAM
+                icon: speedometer-symbolic
+                style: destructive
+                button_text: "Optimize"
+              on_press:
+                type: exec
+                command: kitty --class 210_zram_optimize_swappiness.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/210_zram_optimize_swappiness.sh"
+                terminal: false
+
+
+  - type: section
+    properties:
+      title: Clock
+      icon: ''
+      description: ''
+    items:
+    - type: toggle
+      properties:
+        title: 24-Hour Clock
+        description: Toggle between 12hr (AM/PM) and 24hr format
+        icon: preferences-system-time-symbolic
+        key: time_format
+      on_toggle:
+        enabled:
+          type: exec
+          command: "~/user_scripts/waybar/toggle_time.sh --24"
+          terminal: false
+        disabled:
+          type: exec
+          command: "~/user_scripts/waybar/toggle_time.sh --12"
+          terminal: false
+
   - type: section
     properties:
       title: Status Bar & Notifications
@@ -985,36 +1398,42 @@ pages:
       icon: ''
       description: ''
     items:
-    - type: button
-      properties:
-        title: Dusky Hyprlock TUI
-        description: Swap Lock Screen Layout
-        icon: system-lock-screen-symbolic
-        button_text: "Open"
-      on_press:
-        type: exec
-        command: kitty --class dusky_hyprlock_switcher.sh --hold sh -c $HOME/user_scripts/hyprlock/dusky_hyprlock_switcher.sh
-        terminal: false
-    - type: button
-      properties:
-        title: Dusky Hypridle TUI
-        description: Customize Hypridle timings (TUI)
-        icon: preferences-system-time-symbolic
-        button_text: "Open"
-      on_press:
-        type: exec
-        command: kitty --class dusky_hypridle.sh --hold sh -c "$HOME/user_scripts/hypridle/dusky_hypridle.sh"
-        terminal: false
-    - type: button
-      properties:
-        title: Toggle Idle Daemon
-        description: Enable/Disable Hypridle (Current session)
-        icon: media-playlist-repeat-symbolic
-        button_text: "Toggle"
-      on_press:
-        type: exec
-        command: $HOME/user_scripts/waybar/toggle_hypridle.sh
-        terminal: false
+      - type: expander
+        properties:
+          title: Lock Screen & Idle
+          description: Manage Hyprlock and Hypridle
+          icon: system-lock-screen-symbolic
+        items:
+          - type: button
+            properties:
+              title: Dusky Hyprlock TUI
+              description: Swap Lock Screen Layout
+              icon: system-lock-screen-symbolic
+              button_text: "Open"
+            on_press:
+              type: exec
+              command: kitty --class dusky_hyprlock_switcher.sh --hold sh -c $HOME/user_scripts/hyprlock/dusky_hyprlock_switcher.sh
+              terminal: false
+          - type: button
+            properties:
+              title: Dusky Hypridle TUI
+              description: Customize Hypridle timings (TUI)
+              icon: preferences-system-time-symbolic
+              button_text: "Open"
+            on_press:
+              type: exec
+              command: kitty --class dusky_hypridle.sh --hold sh -c "$HOME/user_scripts/hypridle/dusky_hypridle.sh"
+              terminal: false
+          - type: button
+            properties:
+              title: Toggle Idle Daemon
+              description: Enable/Disable Hypridle (Current session)
+              icon: media-playlist-repeat-symbolic
+              button_text: "Toggle"
+            on_press:
+              type: exec
+              command: $HOME/user_scripts/waybar/toggle_hypridle.sh
+              terminal: false
 
 - id: services
   title: Services
@@ -1054,6 +1473,63 @@ pages:
   layout:
   - type: section
     properties:
+      title: System Defaults
+      icon: preferences-desktop-peripherals-symbolic
+      description: Manage your global application preferences
+    items:
+    - type: navigation
+      properties:
+        title: Default Applications
+        description: Browser, File Manager, Editor, and Terminal
+        icon: applications-system-symbolic
+      layout:
+        - type: section
+          properties:
+            title: Global Defaults
+            description: Select your preferred default software
+          items:
+            - type: button
+              properties:
+                title: File Manager
+                description: Switch system-wide file manager
+                icon: system-file-manager-symbolic
+                button_text: "Switch"
+              on_press:
+                type: exec
+                command: kitty --class 235_file_manager_switch.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/235_file_manager_switch.sh"
+                terminal: false
+            - type: button
+              properties:
+                title: Web Browser
+                description: Set default internet browser
+                icon: web-browser-symbolic
+                button_text: "Switch"
+              on_press:
+                type: exec
+                command: kitty --class 236_browser_switcher.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/236_browser_switcher.sh"
+                terminal: false
+            - type: button
+              properties:
+                title: Text Editor
+                description: Set default code/text editor
+                icon: text-editor-symbolic
+                button_text: "Switch"
+              on_press:
+                type: exec
+                command: kitty --class 237_text_editer_switcher.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/237_text_editer_switcher.sh"
+                terminal: false
+            - type: button
+              properties:
+                title: Terminal Emulator
+                description: Set default system terminal
+                icon: utilities-terminal-symbolic
+                button_text: "Switch"
+              on_press:
+                type: exec
+                command: kitty --class 238_terminal_switcher.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/238_terminal_switcher.sh"
+                terminal: false
+  - type: section
+    properties:
       title: Core Configuration
       icon: ''
       description: Main system settings
@@ -1062,7 +1538,7 @@ pages:
       properties:
         title: User Customizations
         description: Main Hyprland config
-        icon: preferences-desktop-symbolic
+        icon: text-editor-symbolic
       layout:
         - type: section
           properties:
@@ -1127,13 +1603,27 @@ pages:
 
     - type: navigation
       properties:
-        title: Environment Variables
+        title: Auto setup GPU Environment Variables
         description: UWSM and Hyprland environment settings
-        icon: text-x-script-symbolic
+        icon: video-display-symbolic
       layout:
         - type: section
           properties:
             title: Environment Variables
+          items:
+            - type: button
+              properties:
+                title: Auto Configure GPU
+                description: Detect and set GPU vars (UWSM)
+                icon: preferences-desktop-display-symbolic
+                style: suggested
+                button_text: "Run"
+              on_press:
+                type: exec
+                command: kitty --class 000_configure_uwsm_gpu.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/035_configure_uwsm_gpu.sh"
+        - type: section
+          properties:
+            title: Environment Variable files
           items:
             - type: button
               properties:
@@ -1162,26 +1652,6 @@ pages:
               on_press:
                 type: exec
                 command: gnome-text-editor "$HOME/.config/uwsm/env-hyprland"
-            - type: button
-              properties:
-                title: Auto Configure GPU
-                description: Detect and set GPU vars (UWSM)
-                icon: preferences-desktop-display-symbolic
-                style: suggested
-                button_text: "Run"
-              on_press:
-                type: exec
-                command: kitty --class 000_configure_uwsm_gpu.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/000_configure_uwsm_gpu.sh"
-            - type: button
-              properties:
-                title: Disable GPU Vars
-                description: Comment out all GPU variables
-                icon: edit-delete-symbolic
-                style: destructive
-                button_text: "Run"
-              on_press:
-                type: exec
-                command: kitty --class 000_uwsm_env_comment.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/000_uwsm_env_comment.sh"
 
     - type: navigation
       properties:
@@ -1255,6 +1725,23 @@ pages:
                     on_press:
                       type: exec
                       command: kitty --class dusky_appearances.sh --hold sh -c "$HOME/user_scripts/hypr/dusky_appearances.sh"
+            - type: button
+              properties:
+                title: Workspace Rules
+                description: Configure Workspace Rules
+                icon: applications-graphics-symbolic
+                buttons:
+                  - icon: text-x-script-symbolic
+                    button_text: "File"
+                    on_press:
+                      type: exec
+                      command: gnome-text-editor "$HOME/.config/hypr/edit_here/source/workspace_rules.conf"
+                  - icon: applications-graphics-symbolic
+                    button_text: "TUI"
+                    style: suggested
+                    on_press:
+                      type: exec
+                      command: kitty --class dusky_workspace_manager.sh --hold sh -c "$HOME/user_scripts/hypr/dusky_workspace_manager.sh"
             - type: button
               properties:
                 title: Hypridle
@@ -1603,7 +2090,7 @@ pages:
   layout:
   - type: section
     properties:
-      title: Artificial Intelligence
+      title: Large Language Models (LLM)
       icon: ''
       description: ''
     items:
@@ -1617,6 +2104,12 @@ pages:
         type: exec
         command: kitty --class ollama_terminal.sh --title "Ollama" --hold sh -c "$HOME/user_scripts/llm/ollama_terminal.sh"
         terminal: false
+  - type: section
+    properties:
+      title: Image Tools
+      icon: ''
+      description: ''
+    items:
     - type: button
       properties:
         title: Google Lens Search
@@ -1629,26 +2122,6 @@ pages:
         terminal: false
     - type: button
       properties:
-        title: TTS - Kokoro (GPU)
-        description: Text-to-Speech synthesis
-        icon: audio-speakers-symbolic
-        button_text: "Speak"
-      on_press:
-        type: exec
-        command: $HOME/user_scripts/tts_stt/kokoro_gpu/speak.sh
-        terminal: false
-    - type: button
-      properties:
-        title: STT - Faster Whisper
-        description: Speech-to-Text dictation
-        icon: microphone-sensitivity-high-symbolic
-        button_text: "Record"
-      on_press:
-        type: exec
-        command: $HOME/user_scripts/tts_stt/faster_whisper/faster_whisper_sst.sh
-        terminal: false
-    - type: button
-      properties:
         title: OCR Selection
         description: Copy text from screen
         icon: edit-copy-symbolic
@@ -1658,36 +2131,49 @@ pages:
         command: sh -c 'region=$(slurp); grim -g "$region" - | tesseract stdin stdout
           -l eng | wl-copy'
         terminal: false
-- id: setup_features
-  title: Setup Features
-  icon: system-software-install-symbolic
-  layout:
   - type: section
     properties:
-      title: Installers
+      title: Text to Speech (TTS)
       icon: ''
       description: ''
     items:
     - type: button
       properties:
-        title: Setup Cloudflare Warp
-        description: Install and configure Warp VPN
-        icon: security-high-symbolic
+        title: Dusky TTS (Kokoro)
+        description: Supports Nvidia, AMD, CPU
+        icon: audio-speakers-symbolic
         button_text: "Install"
       on_press:
         type: exec
-        command: kitty --class 010_warp.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/010_warp.sh"
+        command: kitty --class kokoro_installer.sh --hold sh -c "$HOME/user_scripts/tts_stt/dusky_kokoro/kokoro_installer.sh"
         terminal: false
+  - type: section
+    properties:
+      title: Speech to Text (SST)
+      icon: ''
+      description: ''
+    items:
     - type: button
       properties:
-        title: Setup Waydroid
-        description: Install Android KVM container
-        icon: phone-symbolic
+        title: Dusky STT (Parakeet)
+        description: Supports Nvidia, AMD, CPU
+        icon: microphone-sensitivity-high-symbolic
         button_text: "Install"
       on_press:
         type: exec
-        command: kitty --class 069_waydroid_setup.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/069_waydroid_setup.sh"
+        command: kitty --class parakeet_installer.sh --hold sh -c "$HOME/user_scripts/tts_stt/dusky_parakeet/parakeet_installer.sh"
         terminal: false
+
+- id: setup_features
+  title: Setup
+  icon: system-software-install-symbolic
+  layout:
+  - type: section
+    properties:
+      title: Core Installers
+      icon: ''
+      description: Essential tools
+    items:
     - type: button
       properties:
         title: Install AUR Helper
@@ -1696,18 +2182,574 @@ pages:
         button_text: "Install"
       on_press:
         type: exec
-        command: kitty --class 009_aur_paru_fallback_yay.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/009_aur_paru_fallback_yay.sh"
+        command: kitty --class 080_aur_paru_fallback_yay.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/080_aur_paru_fallback_yay.sh"
         terminal: false
     - type: button
       properties:
-        title: Coming Soon...
-        description: More setup scripts are in development
-        icon: content-loading-symbolic
-        button_text: "Wait"
+        title: Setup Cloudflare Warp
+        description: Install and configure Warp VPN
+        icon: security-high-symbolic
+        button_text: "Setup"
       on_press:
         type: exec
-        command: echo 'Stay tuned for more updates!'
+        command: kitty --class 085_warp.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/085_warp.sh"
         terminal: false
+    - type: button
+      properties:
+        title: Preload Config
+        description: "Cache binaries (WARNING: High RAM Usage!)"
+        icon: system-run-symbolic
+        style: destructive
+        button_text: "Setup"
+      on_press:
+        type: exec
+        command: kitty --class 335_preload_config.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/335_preload_config.sh"
+        terminal: false
+    - type: button
+      properties:
+        title: SDDM Setup
+        description: Custom login screen & profile picture
+        icon: system-users-symbolic
+        button_text: "Setup"
+      on_press:
+        type: exec
+        command: kitty --class 465_sddm_setup.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/465_sddm_setup.sh"
+        terminal: false
+
+    - type: navigation
+      properties:
+        title: BTRFS Sub-volume Setup
+        description: Configure BTRFS snapshots and snapper
+        icon: document-save-symbolic
+      layout:
+        - type: section
+          properties:
+            title: BTRFS Setup
+          items:
+            - type: button
+              properties:
+                title: 'Step 1: Limine Setup'
+                description: Configure Limine bootloader for BTRFS
+                icon: computer-symbolic
+                button_text: "Setup"
+              on_press:
+                type: exec
+                command: kitty --class 01_limine_setup.sh --hold sh -c "$HOME/user_scripts/btrfs_snapshots/01_limine_setup.sh --auto"
+                terminal: false
+            - type: button
+              properties:
+                title: 'Step 2: Snapper Isolation Subvolume'
+                description: Configure snapper isolation subvolume
+                icon: drive-harddisk-system-symbolic
+                button_text: "Setup"
+              on_press:
+                type: exec
+                command: kitty --class 02_snapper_isolation_subvolume.sh --hold sh -c "$HOME/user_scripts/btrfs_snapshots/02_snapper_isolation_subvolume.sh --auto"
+                terminal: false
+            - type: button
+              properties:
+                title: 'Step 3: Snapper Pacman Hooks'
+                description: Enable automatic snapshots on pacman operations
+                icon: system-software-install-symbolic
+                button_text: "Setup"
+              on_press:
+                type: exec
+                command: kitty --class 03_snapper_pacman_hooks.sh --hold sh -c "$HOME/user_scripts/btrfs_snapshots/03_snapper_pacman_hooks.sh --auto"
+                terminal: false
+
+  - type: section
+    properties:
+      title: Dusky Enhancements
+      icon: ''
+      description: Optional components
+    items:
+    - type: button
+      properties:
+        title: Optional Dusky Packages
+        description: Install extra utilities
+        icon: package-x-generic-symbolic
+        button_text: "Install"
+      on_press:
+        type: exec
+        command: kitty --class 090_paru_packages_optional.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/090_paru_packages_optional.sh"
+        terminal: false
+    - type: button
+      properties:
+        title: Dusky Wallpaper Pack
+        description: Download ~2 GB of wallpapers
+        icon: image-x-generic-symbolic
+        button_text: "Download"
+      on_press:
+        type: exec
+        command: kitty --class 150_wallpapers_download.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/150_wallpapers_download.sh"
+        terminal: false
+
+###    - type: navigation
+###      properties:
+###        title: Dusky Plugins
+###        description: Manage Dusky extensions
+###        icon: application-x-addon-symbolic
+###      layout:
+###        - type: section
+###          properties:
+###            title: Layouts & Workspaces
+###          items:
+###            - type: button
+###              properties:
+###                title: Hyprexpo
+###                description: Provides a workspace overview, inspired by macOS Mission Control or GNOME Activities.
+###                icon: view-grid-symbolic
+###                button_text: "Install"
+###              on_press:
+###                type: exec
+###                command: kitty --class 356_dusky_plugin_manager.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/356_dusky_plugin_manager.sh --expo"
+###                terminal: false
+###            - type: button
+###              properties:
+###                title: Hyprspace
+###                description: An alternative spatial overview providing a zoomed-out, interactive view of all workspaces.
+###                icon: view-app-grid-symbolic
+###                button_text: "Install"
+###              on_press:
+###                type: exec
+###                command: kitty --class 356_dusky_plugin_manager.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/356_dusky_plugin_manager.sh --space"
+###                terminal: false
+###            - type: button
+###              properties:
+###                title: Hyprscrolling
+###                description: A layout plugin that allows moving focus and windows like a continuous scrolling column.
+###                icon: media-playlist-shuffle-symbolic
+###                button_text: "Install"
+###              on_press:
+###                type: exec
+###                command: kitty --class 356_dusky_plugin_manager.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/356_dusky_plugin_manager.sh --scrolling"
+###                terminal: false
+###            - type: button
+###              properties:
+###                title: hy3 (i3 Tiling)
+###                description: Replaces the default layout with an i3/Sway-like manual tiling engine using container nodes.
+###                icon: view-split-left-right-symbolic
+###                button_text: "Install"
+###              on_press:
+###                type: exec
+###                command: kitty --class 356_dusky_plugin_manager.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/356_dusky_plugin_manager.sh --hy3"
+###                terminal: false
+###
+###        - type: section
+###          properties:
+###            title: Visuals & Enhancements
+###          items:
+###            - type: button
+###              properties:
+###                title: Hypr-Dynamic-Cursors
+###                description: Adds dynamic physics and behaviors to your cursor, including directional tilt and shake to locate.
+###                icon: input-mouse-symbolic
+###                button_text: "Install"
+###              on_press:
+###                type: exec
+###                command: kitty --class 356_dusky_plugin_manager.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/356_dusky_plugin_manager.sh --cursors"
+###                terminal: false
+###            - type: button
+###              properties:
+###                title: Hyprbars
+###                description: Adds customizable title bars to individual windows, complete with window management buttons.
+###                icon: window-new-symbolic
+###                button_text: "Install"
+###              on_press:
+###                type: exec
+###                command: kitty --class 356_dusky_plugin_manager.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/356_dusky_plugin_manager.sh --bars"
+###                terminal: false
+###            - type: button
+###              properties:
+###                title: Hyprglass
+###                description: Enhanced translucent window styling and blur aesthetics for the Wayland compositor.
+###                icon: palette-symbolic
+###                button_text: "Install"
+###              on_press:
+###                type: exec
+###                command: kitty --class 356_dusky_plugin_manager.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/356_dusky_plugin_manager.sh --glass"
+###                terminal: false
+###            - type: button
+###              properties:
+###                title: Hypr-DarkWindow
+###                description: Allows applying specific visual shaders (like invert or tint) to individual active windows.
+###                icon: display-brightness-symbolic
+###                button_text: "Install"
+###              on_press:
+###                type: exec
+###                command: kitty --class 356_dusky_plugin_manager.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/356_dusky_plugin_manager.sh --darkwindow"
+###                terminal: false
+###
+###        - type: section
+###          properties:
+###            title: Input & Gestures
+###          items:
+###            - type: button
+###              properties:
+###                title: Hypr-Hot-Edge
+###                description: Enables responsive screen edge triggers to rapidly toggle special workspaces or panels.
+###                icon: object-select-symbolic
+###                button_text: "Install"
+###              on_press:
+###                type: exec
+###                command: kitty --class 356_dusky_plugin_manager.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/356_dusky_plugin_manager.sh --hotedge"
+###                terminal: false
+###            - type: button
+###              properties:
+###                title: Hyprgrass
+###                description: Advanced multi-touch gesture support for Wayland touchscreens, enabling swipe and edge mechanics.
+###                icon: input-touchpad-symbolic
+###                button_text: "Install"
+###              on_press:
+###                type: exec
+###                command: kitty --class 356_dusky_plugin_manager.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/356_dusky_plugin_manager.sh --grass"
+###                terminal: false
+
+    - type: navigation
+      properties:
+        title: Wayclick Setup
+        description: Mechanical keyboard sounds
+        icon: input-keyboard-symbolic
+      layout:
+        - type: section
+          properties:
+            title: Wayclick Configuration
+          items:
+            - type: button
+              properties:
+                title: "Step 1: Reset"
+                description: Clean existing configuration
+                icon: edit-delete-symbolic
+                style: destructive
+                button_text: "Reset"
+              on_press:
+                type: exec
+                command: kitty --class dusky_wayclick.sh --hold sh -c "$HOME/user_scripts/wayclick/dusky_wayclick.sh --reset"
+                terminal: false
+            - type: button
+              properties:
+                title: "Step 2: Sound Packs"
+                description: Downlaod Sound Packs
+                icon: audio-speakers-symbolic
+                button_text: "Download"
+              on_press:
+                type: exec
+                command: kitty --class wayclick_soundpacks_download.sh --hold sh -c "$HOME/user_scripts/wayclick/sounds/wayclick_soundpacks_download.sh --auto --force"
+                terminal: false
+            - type: button
+              properties:
+                title: "Step 3: Install"
+                description: Setup Dusky Wayclick
+                icon: system-software-install-symbolic
+                button_text: "Install"
+              on_press:
+                type: exec
+                command: kitty --class dusky_wayclick.sh --hold sh -c "$HOME/user_scripts/wayclick/dusky_wayclick.sh --setup"
+                terminal: false
+            - type: button
+              properties:
+                title: "Step 4: Configuration"
+                description: Manage Wayclick sounds and logic
+                icon: preferences-desktop-keyboard-shortcuts-symbolic
+                buttons:
+                  - icon: text-x-script-symbolic
+                    button_text: "File"
+                    on_press:
+                      type: exec
+                      command: gnome-text-editor "$HOME/user_scripts/wayclick/dusky_wayclick.sh"
+                  - icon: input-keyboard-symbolic
+                    button_text: "TUI"
+                    style: suggested
+                    on_press:
+                      type: exec
+                      command: kitty --class dusky_tui_wayclick.sh --hold sh -c "$HOME/user_scripts/wayclick/dusky_tui_wayclick.sh"
+                      terminal: false
+    - type: navigation
+      properties:
+        title: Neovim Setup & Maintenance
+        description: Manage configuration and repair plugins
+        icon: text-editor-symbolic
+      layout:
+        - type: section
+          properties:
+            title: Configuration
+            description: Main management tools
+          items:
+            - type: button
+              properties:
+                title: Neovim Manager
+                description: Main configuration and setup wizard
+                icon: preferences-system-symbolic
+                style: suggested
+                button_text: "Open"
+              on_press:
+                type: exec
+                command: kitty --class dusky_neovim_manager.sh --hold sh -c "$HOME/user_scripts/nvim/dusky_neovim_manager.sh"
+                terminal: false
+
+        - type: section
+          properties:
+            title: Maintenance & Recovery
+            description: Use these if Neovim is failing to launch or sync
+          items:
+            - type: button
+              properties:
+                title: "Step 1: Clean"
+                description: Remove Neovim cache and data (Reset)
+                icon: user-trash-symbolic
+                style: destructive
+                button_text: "Clean"
+              on_press:
+                type: exec
+                command: kitty --class 01_reset_neovim.sh --hold sh -c "$HOME/user_scripts/nvim/reset/01_reset_neovim.sh"
+                terminal: false
+            - type: button
+              properties:
+                title: "Step 2: Sync"
+                description: Re-download and sync Lazy plugins
+                icon: view-refresh-symbolic
+                button_text: "Sync"
+              on_press:
+                type: exec
+                command: kitty --class 02_cli_plugins_download.sh --hold sh -c "$HOME/user_scripts/nvim/reset/02_cli_plugins_download.sh"
+                terminal: false
+  - type: section
+    properties:
+      title: Applications
+    items:
+    - type: button
+      properties:
+        title: Vesktop Setup
+        description: Superior Discord client with theming
+        icon: applications-internet-symbolic
+        button_text: "Setup"
+      on_press:
+        type: exec
+        command: kitty --class 470_vesktop_matugen.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/470_vesktop_matugen.sh"
+        terminal: false
+
+  - type: section
+    properties:
+      title: Spotify
+      icon: ''
+      description: ''
+    items:
+    - type: navigation
+      properties:
+        title: Spotify
+        description: Install and Theme
+        icon: media-playback-start-symbolic
+      layout:
+        - type: section
+          properties:
+            title: Spotify (With Matugen)
+            description: 'Themed installation using Spicetify'
+          items:
+          - type: button
+            properties:
+              title: Install Spotify
+              icon: palette-symbolic
+              button_text: "Install"
+            on_press:
+              type: exec
+              command: kitty --class 405_spicetify_matugen_setup.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/405_spicetify_matugen_setup.sh"
+              terminal: false
+
+        - type: section
+          properties:
+            title: Spotify (Without Matugen)
+            description: 'Standard Spotify installation'
+          items:
+          - type: button
+            properties:
+              title: Install Standard Spotify
+              icon: system-software-install-symbolic
+              button_text: "Install"
+            on_press:
+              type: exec
+              command: kitty --class 260_spotify.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/260_spotify.sh"
+              terminal: false
+
+  - type: section
+    properties:
+      title: Hardware Configuration
+      icon: ''
+      description: GPU and Drivers
+    items:
+    - type: navigation
+      properties:
+        title: GPU Drivers
+        description: Nvidia, AMD, Intel configuration
+        icon: video-display-symbolic
+      layout:
+        - type: section
+          properties:
+            title: Nvidia Drivers
+            icon: ''
+            description: Open source drivers
+          items:
+            - type: button
+              properties:
+                title: Nvidia Open Source
+                description: Drivers for 11 series to 60 series
+                icon: video-display-symbolic
+                button_text: "Install"
+              on_press:
+                type: exec
+                command: kitty --class 380_nvidia_open_source.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/380_nvidia_open_source.sh"
+                terminal: false
+
+  - type: section
+    properties:
+      title: Virtualization
+      icon: ''
+      description: Waydroid
+    items:
+    - type: button
+      properties:
+        title: Setup Waydroid
+        description: Install Android KVM container
+        icon: phone-symbolic
+        button_text: "Install"
+      on_press:
+        type: exec
+        command: kitty --class 385_waydroid_setup.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/385_waydroid_setup.sh"
+        terminal: false
+
+- id: troubleshoot
+  title: Troubleshoot
+  icon: tools-check-spelling-symbolic
+  layout:
+  - type: section
+    properties:
+      title: Fixes
+      icon: ''
+      description: Common issues and repairs
+    items:
+    - type: button
+      properties:
+        title: Fix Desktop Entries
+        description: Resolve application launcher issues
+        icon: application-x-executable-symbolic
+        button_text: "Reset"
+      on_press:
+        type: exec
+        command: kitty --class 020_desktop_apps_username_setter.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/020_desktop_apps_username_setter.sh"
+        terminal: false
+    - type: button
+      properties:
+        title: Fix Mirror Speeds
+        description: Update Pacman mirrors (Reflector)
+        icon: network-server-symbolic
+        button_text: "Refresh"
+      on_press:
+        type: exec
+        command: kitty --class 055_pacman_reflector.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/055_pacman_reflector.sh"
+        terminal: false
+    - type: button
+      properties:
+        title: Reset User Configs
+        description: Force reset Hyprland configs (Destructive!)
+        icon: edit-delete-symbolic
+        style: destructive
+        button_text: "Reset"
+      on_press:
+        type: exec
+        command: kitty --class 005_hypr_custom_config_setup.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/005_hypr_custom_config_setup.sh --force"
+        terminal: false
+    - type: button
+      properties:
+        title: Battery Notify Service
+        description: Enable battery alerts
+        icon: battery-level-50-symbolic
+        button_text: "Fix"
+      on_press:
+        type: exec
+        command: kitty --class 135_battery_notify_service.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/135_battery_notify_service.sh"
+        terminal: false
+    - type: button
+      properties:
+        title: Fix Waypaper
+        description: Reset wallpaper configuration
+        icon: image-x-generic-symbolic
+        button_text: "Reset"
+      on_press:
+        type: exec
+        command: kitty --class 170_waypaper_config_reset.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/170_waypaper_config_reset.sh"
+        terminal: false
+    - type: button
+      properties:
+        title: Reset Animations
+        description: Restore default animation settings
+        icon: media-playlist-shuffle-symbolic
+        button_text: "Reset"
+      on_press:
+        type: exec
+        command: kitty --class 175_animation_default.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/175_animation_default.sh"
+        terminal: false
+    - type: button
+      properties:
+        title: SwayNC DGPU Fix
+        description: Fix notification rendering on NVIDIA
+        icon: video-display-symbolic
+        style: destructive
+        button_text: "Caution"
+      on_press:
+        type: exec
+        command: kitty --class 240_swaync_dgpu_fix.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/240_swaync_dgpu_fix.sh"
+        terminal: false
+    - type: button
+      properties:
+        title: Fix Firefox Theme
+        description: Apply Matugen/Pywalfox theme
+        icon: web-browser-symbolic
+        button_text: "Fix"
+      on_press:
+        type: exec
+        command: kitty --class 400_firefox_matugen_pywalfox.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/400_firefox_matugen_pywalfox.sh"
+        terminal: false
+    - type: button
+      properties:
+        title: Fix Cursor Theme
+        description: Reset to Bibata Modern Classic
+        icon: input-mouse-symbolic
+        button_text: "Fix"
+      on_press:
+        type: exec
+        command: kitty --class 375_cursor_theme_bibata_classic_modern.sh --hold sh -c "$HOME/user_scripts/arch_setup_scripts/scripts/375_cursor_theme_bibata_classic_modern.sh"
+        terminal: false
+    - type: navigation
+      properties:
+        title: Neovim Troubleshooting
+        description: Clean and sync plugins
+        icon: text-editor-symbolic
+      layout:
+        - type: section
+          properties:
+            title: Neovim Maintenance
+          items:
+            - type: button
+              properties:
+                title: "Step 1: Clean"
+                description: Remove Neovim cache/data
+                icon: user-trash-symbolic
+                style: destructive
+                button_text: "Clean"
+              on_press:
+                type: exec
+                command: kitty --class 01_reset_neovim.sh --hold sh -c "$HOME/user_scripts/nvim/reset/01_reset_neovim.sh"
+                terminal: false
+            - type: button
+              properties:
+                title: "Step 2: Sync"
+                description: Lazy Sync plugins
+                icon: view-refresh-symbolic
+                button_text: "Sync"
+              on_press:
+                type: exec
+                command: kitty --class 02_cli_plugins_download.sh --hold sh -c "$HOME/user_scripts/nvim/reset/02_cli_plugins_download.sh"
+                terminal: false
+
 - id: about_dusky
   title: About System
   layout:
@@ -1739,21 +2781,21 @@ pages:
     - type: label
       properties:
         title: Kernel Version
-        icon: mintupdate-type-kernel-symbolic
+        icon: computer-symbolic
       value:
         type: system
         key: kernel_version
     - type: label
       properties:
         title: Processor
-        icon: am-cpu-symbolic
+        icon: cpu-symbolic
       value:
         type: system
         key: cpu_model
     - type: label
       properties:
         title: Memory
-        icon: am-memory-symbolic
+        icon: memory-symbolic
       value:
         type: system
         key: memory_total

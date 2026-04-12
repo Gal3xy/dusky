@@ -1,8 +1,9 @@
 """
 Utility functions for the Dusky Control Center.
 
-Thread-safe, secure utility library for GTK4 control center on Arch Linux (Hyprland).
-All file I/O is atomic. All public functions are safe to call from any thread.
+Thread-safe utility library for GTK4 control center on Arch Linux (Hyprland).
+Persisted settings use atomic replace semantics. Public helpers are thread-safe,
+except `preflight_check()`, which is intended for startup use on the main thread.
 """
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ import sys
 import tempfile
 import threading
 from collections.abc import Callable
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Final, TypeVar, overload
 
 import yaml
@@ -46,8 +47,9 @@ _T = TypeVar("_T")
 # CONSTANTS & PATHS
 # =============================================================================
 LABEL_NA: Final[str] = "N/A"
-_SHELL_METACHARACTERS: Final[frozenset[str]] = frozenset("|&;()<>$`\\\"'*?[]#~=!{}%")
-_TILDE_PATTERN: Final[re.Pattern[str]] = re.compile(r"(?:^|(?<=\s))~(?=/|$|\s)")
+_LEADING_ENV_ASSIGNMENT_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"[A-Za-z_][A-Za-z0-9_]*=.*"
+)
 
 
 def _get_xdg_path(env_var: str, default_suffix: str) -> Path:
@@ -85,20 +87,17 @@ class _ResolvedDirectoryCache:
 
     def get(self) -> Path:
         """Get the resolved directory path, creating it if necessary."""
-        # Fast path: atomic read
         resolved = self._resolved
         if resolved is not None:
             return resolved
 
         with self._lock:
-            # Double-check
             if self._resolved is not None:
                 return self._resolved
             try:
                 self._base_dir.mkdir(parents=True, exist_ok=True)
                 self._resolved = self._base_dir.resolve(strict=True)
             except OSError as e:
-                # Fallback if we can't create/resolve (e.g. permission issues)
                 log.error("Failed to resolve directory %s: %s", self._base_dir, e)
                 return self._base_dir
             return self._resolved
@@ -115,30 +114,23 @@ class _ComputeOnceCache:
     def __init__(self) -> None:
         self._lock: Final[threading.Lock] = threading.Lock()
         self._cache: dict[str, object] = {}
-        # Map keys to Condition variables for waiting threads
         self._in_flight: dict[str, threading.Condition] = {}
 
     def get_or_compute(self, key: str, compute_fn: Callable[[], _T]) -> _T:
         """Get value from cache, or compute it if missing, handling concurrency."""
         with self._lock:
-            # Loop ensures we handle spurious wakeups AND retries if leader fails
             while key in self._in_flight:
                 cond = self._in_flight[key]
                 cond.wait()
-                # Woke up: check if result is ready
                 if key in self._cache:
-                    return self._cache[key]  # type: ignore
-                # If not in cache and not in flight, loop terminates to let us retry
+                    return self._cache[key]  # type: ignore[return-value]
 
-            # Fast path / Retry success check
             if key in self._cache:
-                return self._cache[key]  # type: ignore
+                return self._cache[key]  # type: ignore[return-value]
 
-            # We are the leader
             cond = threading.Condition(self._lock)
             self._in_flight[key] = cond
 
-        # Compute outside lock
         try:
             value = compute_fn()
         except BaseException:
@@ -191,53 +183,62 @@ def load_config(config_path: Path) -> dict[str, object]:
 def execute_command(cmd_string: str, title: str, run_in_terminal: bool) -> bool:
     """
     Execute a command via UWSM (Universal Wayland Session Manager).
-    Detaches process to prevent zombies.
+    Returns True only if the launch request was handed off successfully.
     """
-    if not cmd_string or not cmd_string.strip():
-        return False
-
-    expanded_cmd = _expand_command(cmd_string)
-    if not expanded_cmd:
+    normalized_cmd = _normalize_command(cmd_string)
+    if not normalized_cmd:
         return False
 
     safe_title = _sanitize_title(title)
-    full_cmd = _build_command_list(expanded_cmd, safe_title, run_in_terminal)
+    full_cmd = _build_command_list(normalized_cmd, safe_title, run_in_terminal)
 
     if full_cmd is None:
         log.error("Failed to parse command: %r", cmd_string)
         return False
 
+    if run_in_terminal:
+        if shutil.which("kitty") is None:
+            log.error("Terminal launcher 'kitty' was not found in PATH")
+            return False
+    elif full_cmd[2:4] != ["sh", "-c"]:
+        executable = full_cmd[2]
+        if shutil.which(executable) is None:
+            log.error("Executable not found: %r", executable)
+            return False
+
+    from gi.repository import GLib
+
     try:
-        # start_new_session=True fully detaches the process
-        subprocess.Popen(
+        GLib.spawn_async(
             full_cmd,
-            start_new_session=True,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            close_fds=True,
+            flags=GLib.SpawnFlags.SEARCH_PATH,
         )
         return True
-    except FileNotFoundError:
+    except GLib.Error as e:
         log.error(
-            "Executable not found: %r. Ensure 'uwsm-app' is installed.",
-            full_cmd[0] if full_cmd else "unknown"
+            "Executable failed or not found: %r. Ensure 'uwsm-app' is installed. (GLib Error: %s)",
+            full_cmd[0] if full_cmd else "unknown",
+            e.message,
         )
         return False
-    except OSError as e:
-        log.error("OS Error executing %r: %s", cmd_string, e)
+    except Exception as e:
+        log.error("Unexpected error executing %r: %s", cmd_string, e)
         return False
 
 
-def _expand_command(cmd_string: str) -> str:
-    """Expand env vars ($HOME) and tilde (~)."""
-    expanded = os.path.expandvars(cmd_string)
-    
-    def _expand_tilde(match: re.Match[str]) -> str:
-        return str(Path.home())
+def _normalize_command(cmd_string: str) -> str:
+    """Trim surrounding whitespace and safely expand $HOME/~ to absolute paths."""
+    cmd = cmd_string.strip()
+    home_dir = str(Path.home())
 
-    expanded = _TILDE_PATTERN.sub(_expand_tilde, expanded)
-    return expanded.strip()
+    cmd = cmd.replace("$HOME", home_dir)
+
+    if cmd.startswith("~/"):
+        cmd = home_dir + cmd[1:]
+
+    cmd = cmd.replace(" ~/", f" {home_dir}/")
+
+    return cmd
 
 
 def _sanitize_title(title: str | None) -> str:
@@ -249,32 +250,94 @@ def _sanitize_title(title: str | None) -> str:
     return " ".join(sanitized.split()) or "Dusky Terminal"
 
 
+def _requires_shell(command: str, parsed_args: list[str]) -> bool:
+    """Return True only when shell semantics are actually required."""
+    if _LEADING_ENV_ASSIGNMENT_PATTERN.fullmatch(parsed_args[0]) is not None:
+        return True
+
+    in_single = False
+    in_double = False
+    escaped = False
+    token_start = True
+
+    for index, ch in enumerate(command):
+        if escaped:
+            escaped = False
+            token_start = False
+            continue
+
+        if in_single:
+            if ch == "'":
+                in_single = False
+            continue
+
+        if in_double:
+            if ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_double = False
+            elif ch in "$`":
+                return True
+            continue
+
+        if ch.isspace():
+            token_start = True
+            continue
+        if ch == "\\":
+            escaped = True
+            token_start = False
+            continue
+        if ch == "'":
+            in_single = True
+            token_start = False
+            continue
+        if ch == '"':
+            in_double = True
+            token_start = False
+            continue
+        if ch in "|&;()<>`":
+            return True
+        if ch == "$":
+            return True
+        if ch == "~" and token_start:
+            next_ch = command[index + 1] if index + 1 < len(command) else ""
+            if not next_ch or next_ch.isspace() or next_ch == "/":
+                return True
+
+        token_start = False
+
+    return False
+
+
 def _build_command_list(
-    expanded_cmd: str, safe_title: str, run_in_terminal: bool
+    normalized_cmd: str, safe_title: str, run_in_terminal: bool
 ) -> list[str] | None:
-    """Construct the argv list for subprocess."""
+    """Construct the argv list for process spawning."""
     if run_in_terminal:
         return [
-            "uwsm-app", "--",
+            "uwsm-app",
+            "--",
             "kitty",
-            "--class", "dusky-term",
-            "--title", safe_title,
+            "--class",
+            "dusky-term",
+            "--title",
+            safe_title,
             "--hold",
-            "sh", "-c", expanded_cmd,
+            "sh",
+            "-c",
+            normalized_cmd,
         ]
 
-    # Use shell if command contains metacharacters
-    needs_shell = any(c in expanded_cmd for c in _SHELL_METACHARACTERS)
-    if needs_shell:
-        return ["uwsm-app", "--", "sh", "-c", expanded_cmd]
-
     try:
-        parsed_args = shlex.split(expanded_cmd)
+        parsed_args = shlex.split(normalized_cmd, posix=True)
     except ValueError:
-        return ["uwsm-app", "--", "sh", "-c", expanded_cmd]
+        return ["uwsm-app", "--", "sh", "-c", normalized_cmd]
 
     if not parsed_args:
         return None
+
+    if _requires_shell(normalized_cmd, parsed_args):
+        return ["uwsm-app", "--", "sh", "-c", normalized_cmd]
 
     return ["uwsm-app", "--", *parsed_args]
 
@@ -285,12 +348,15 @@ def _build_command_list(
 def preflight_check() -> None:
     """
     Check for critical dependencies (GTK, UWSM).
-    Exits with error message if missing.
+
+    Intended for startup use on the main thread. On failure, this function exits
+    the current thread of execution via SystemExit.
     """
     missing_deps: list[str] = []
 
     try:
         import gi
+
         gi.require_version("Gtk", "4.0")
         gi.require_version("Adw", "1")
     except (ImportError, ValueError):
@@ -308,7 +374,6 @@ def preflight_check() -> None:
         print(msg, file=sys.stderr)
         sys.exit(1)
 
-    # Check write permissions
     try:
         SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
         test_file = SETTINGS_DIR / ".write_test"
@@ -322,7 +387,9 @@ def preflight_check() -> None:
 # SYSTEM VALUE RETRIEVAL
 # =============================================================================
 def get_system_value(key: str) -> str:
-    """Get a system info value (cached lifetime)."""
+    """Get a system info value (bypasses cache for dynamic stats like memory)."""
+    if key in {"memory_used"}:
+        return _compute_system_value(key)
     return _system_info_cache.get_or_compute(key, lambda: _compute_system_value(key))
 
 
@@ -331,6 +398,8 @@ def _compute_system_value(key: str) -> str:
     match key:
         case "memory_total":
             return _get_memory_total()
+        case "memory_used":
+            return _get_memory_used()
         case "cpu_model":
             return _get_cpu_model()
         case "gpu_model":
@@ -356,6 +425,25 @@ def _get_memory_total() -> str:
     return LABEL_NA
 
 
+def _get_memory_used() -> str:
+    try:
+        content = Path("/proc/meminfo").read_text(encoding="utf-8")
+        mem_total = 0
+        mem_available = 0
+        for line in content.splitlines():
+            if line.startswith("MemTotal:"):
+                mem_total = int(line.split()[1])
+            elif line.startswith("MemAvailable:"):
+                mem_available = int(line.split()[1])
+        if mem_total and mem_available:
+            used_kb = mem_total - mem_available
+            used_gb = round(used_kb / 1_048_576, 1)
+            return f"{used_gb} GB"
+    except (OSError, ValueError, IndexError):
+        pass
+    return LABEL_NA
+
+
 def _get_cpu_model() -> str:
     try:
         content = Path("/proc/cpuinfo").read_text(encoding="utf-8")
@@ -371,22 +459,31 @@ def _get_cpu_model() -> str:
 def _get_gpu_model() -> str:
     """Detect GPU using lspci (human-readable or machine format)."""
     try:
-        # Try machine format first
         res = subprocess.run(
             ["lspci", "-mm"],
-            capture_output=True, text=True, timeout=5, check=False
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
         )
         if res.returncode == 0:
             for line in res.stdout.splitlines():
-                if '"VGA compatible controller"' in line or '"3D controller"' in line:
-                    parts = line.split('"')
-                    if len(parts) >= 8:
-                        return f"{parts[5]} {parts[7]}".strip()
-        
-        # Fallback to standard
+                try:
+                    fields = shlex.split(line, posix=True)
+                except ValueError:
+                    continue
+                if len(fields) >= 4 and fields[1] in {
+                    "VGA compatible controller",
+                    "3D controller",
+                }:
+                    return f"{fields[2]} {fields[3]}".strip()
+
         res = subprocess.run(
             ["lspci"],
-            capture_output=True, text=True, timeout=5, check=False
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
         )
         if res.returncode == 0:
             for line in res.stdout.splitlines():
@@ -403,39 +500,46 @@ def _get_gpu_model() -> str:
 # SETTINGS PERSISTENCE (Atomic File I/O)
 # =============================================================================
 def _validate_settings_path(key: str) -> Path | None:
-    """Prevent path traversal attacks."""
-    if not key or not isinstance(key, str):
+    """
+    Validate the path to prevent directory traversal while natively resolving symlinks.
+    This ensures atomic writes target the dotfile repo instead of clobbering the symlink.
+    """
+    if not key or not isinstance(key, str) or "\0" in key:
         return None
-    if "\0" in key:
+
+    pure = PurePosixPath(key)
+    if pure.is_absolute() or any(part in {"", ".."} for part in pure.parts):
+        log.warning("Invalid settings path key (traversal attempt detected): %r", key)
         return None
-    
+
+    base = _settings_dir_cache.get()
+    target = base / key
+
     try:
-        base = _settings_dir_cache.get()
-        # Resolve validates and removes ..
-        target = (base / key).resolve()
-        # Ensure it's strictly inside base
-        target.relative_to(base)
+        # Resolve strictly to follow symlinks to their ultimate destination
+        if target.exists():
+            return target.resolve(strict=True)
+        # If it doesn't exist yet, resolve the parent
+        return target.parent.resolve(strict=True) / target.name
+    except OSError:
         return target
-    except (ValueError, OSError):
-        log.warning("Invalid settings path key: %r", key)
-        return None
 
 
-def save_setting(
-    key: str, value: bool | int | float | str, *, as_int: bool = False
-) -> bool:
+def save_setting(key: str, value: bool | int | float | str) -> bool:
     """Atomic write to disk (Temp File -> Fsync -> Rename)."""
     target = _validate_settings_path(key)
     if target is None:
         return False
 
-    content = ("1" if value else "0") if (as_int and isinstance(value, bool)) else str(value)
-
+    content = str(value)
     temp_fd: int | None = None
     temp_path: Path | None = None
 
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
+        # We create the temp file in the resolved parent directory so that
+        # when we rename it over the target, we don't break the symlink 
+        # sitting in ~/.config. It safely overwrites the file in the git repo.
         temp_fd, temp_path_str = tempfile.mkstemp(
             dir=target.parent, prefix=f".{target.name}.", suffix=".tmp"
         )
@@ -466,26 +570,27 @@ def save_setting(
         if temp_fd is not None:
             os.close(temp_fd)
         if temp_path is not None:
-            # Only unlinks if rename didn't happen
             temp_path.unlink(missing_ok=True)
 
 
 @overload
-def load_setting(key: str, default: bool, *, is_inversed: bool = False) -> bool: ...
+def load_setting(key: str, default: bool) -> bool: ...
+
 @overload
-def load_setting(key: str, default: int, *, is_inversed: bool = False) -> int: ...
+def load_setting(key: str, default: int) -> int: ...
+
 @overload
-def load_setting(key: str, default: float, *, is_inversed: bool = False) -> float: ...
+def load_setting(key: str, default: float) -> float: ...
+
 @overload
-def load_setting(key: str, default: str, *, is_inversed: bool = False) -> str: ...
+def load_setting(key: str, default: str) -> str: ...
+
 @overload
-def load_setting(key: str, default: None = None, *, is_inversed: bool = False) -> str | None: ...
+def load_setting(key: str, default: None = None) -> str | None: ...
 
 def load_setting(
     key: str,
     default: bool | int | float | str | None = None,
-    *,
-    is_inversed: bool = False,
 ) -> bool | int | float | str | None:
     """Load setting with automatic type coercion based on default value."""
     target = _validate_settings_path(key)
@@ -499,27 +604,26 @@ def load_setting(
 
     try:
         match default:
-            case bool(): return _parse_bool(raw, is_inversed)
-            case int(): return int(raw)
-            case float(): return float(raw)
-            case _: return raw
+            case bool():
+                return _parse_bool(raw)
+            case int():
+                return int(raw)
+            case float():
+                return float(raw)
+            case _:
+                return raw
     except ValueError:
         return default
 
 
-def _parse_bool(value: str, is_inversed: bool) -> bool:
+def _parse_bool(value: str) -> bool:
     """Robust boolean parsing."""
-    lowered = value.lower().strip()
+    lowered = value.strip().lower()
     if lowered in {"true", "yes", "on", "1"}:
-        res = True
-    elif lowered in {"false", "no", "off", "0", ""}:
-        res = False
-    else:
-        try:
-            res = (int(value) != 0) if len(value) < 20 else False
-        except ValueError:
-            res = False
-    return res ^ is_inversed
+        return True
+    if lowered in {"false", "no", "off", "0"}:
+        return False
+    raise ValueError(f"Invalid boolean value: {value!r}")
 
 
 # =============================================================================
