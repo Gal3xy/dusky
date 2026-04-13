@@ -7,6 +7,7 @@
 
 # --- 1. CONFIGURATION ---
 
+# Group 0: Dusky ISO packages
 declare -ar pkgs_offline=(
   "intel-ucode" "amd-ucode" "mkinitcpio" "gradle" "glaze" "python-cssselect" "gradle" "base" "base-devel" "python-lxml" "python-certifi" "python-charset-normalizer" "python-idna" "python-requests" "python-urllib3" "deno" "yt-dlp" "yt-dlp-ejs" "hunspell" "xf86-input-libinput" "xorg-server" "xorg-xauth" "boost-libs"
  )
@@ -83,6 +84,7 @@ declare -ar pkgs_btrfs_snapshot=(
 )
 
 declare -ar GROUP_LABELS=(
+  "Dusky ISO packages"
   "Graphics & Drivers"
   "Hyprland Core"
   "GUI Appearance"
