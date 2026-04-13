@@ -15,7 +15,7 @@ declare -a ACTIVE_TEMP_FILES=()
 
 cleanup() {
     local f
-    for f in "${ACTIVE_TEMP_FILES[@]}\"; do
+    for f in "${ACTIVE_TEMP_FILES[@]}"; do
         [[ -n "$f" && -f "$f" ]] && rm -f "$f" 2>/dev/null || true
     done
 }
@@ -202,7 +202,7 @@ EOF
 
 rebuild_initramfs() { 
     info "Recompiling early boot images to inject overlayfs hooks..."
-    mkinitcpio -P
+    mkinitcpio -P < <(echo "n")
     limine-update || true
 }
 
