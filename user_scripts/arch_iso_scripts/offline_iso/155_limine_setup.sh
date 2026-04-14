@@ -59,6 +59,18 @@ backup_file() {
 
     local stamp
     printf -v stamp '%(%Y%m%d-%H%M%S)T' -1
+
+    # Purge stale backups of this exact file to prevent constrained partition (ESP) exhaustion
+    local shopt_save
+    shopt_save=$(shopt -p nullglob || true)
+    shopt -s nullglob
+    local -a old_baks=("${file}.bak."*)
+    eval "$shopt_save"
+    
+    if ((${#old_baks[@]} > 0)); then
+        rm -f "${old_baks[@]}" 2>/dev/null || true
+    fi
+
     cp -a -- "$file" "${file}.bak.${stamp}"
     BACKED_UP["$file"]=1
     info "Backup created: ${file}.bak.${stamp}"
@@ -248,8 +260,10 @@ set_shell_var() {
         # Cleanly uncomment the template line rather than appending
         sed -i -E "s|^[[:space:]]*#[[:space:]]*${key}=.*|${key}=${escaped_value}|" "$file"
     else
-        # Fallback: enforce trailing newline before appending
-        [[ -s "$file" ]] && [[ "$(tail -c1 "$file" | wc -l)" -eq 0 ]] && echo "" >> "$file"
+        # Safely check for a missing EOF newline without triggering set -e on false conditions
+        if test -s "$file" && [[ "$(tail -c1 "$file" | wc -l)" -eq 0 ]]; then
+            echo "" >> "$file"
+        fi
         printf '%s=%s\n' "$key" "$value" >> "$file"
     fi
 }
@@ -747,6 +761,7 @@ EOF
 
 preflight_checks() {
     require_cmd pacman
+    require_cmd df
     require_cmd findmnt
     require_cmd blkid
     require_cmd lsblk
@@ -757,6 +772,17 @@ preflight_checks() {
     require_cmd mktemp
     [[ -d /sys/firmware/efi ]] || fatal "Not booted in EFI mode."
     [[ -f /etc/mkinitcpio.conf ]] || fatal "/etc/mkinitcpio.conf not found."
+    
+    # Pre-flight capacity check to prevent mid-transaction ENOSPC on the ESP
+    local esp_mnt
+    esp_mnt="$(detect_esp_mountpoint 2>/dev/null || true)"
+    if [[ -n "$esp_mnt" ]]; then
+        local avail_kb
+        avail_kb="$(df -k "$esp_mnt" 2>/dev/null | awk 'NR==2 {print $4}' || true)"
+        if [[ -n "$avail_kb" ]] && (( avail_kb < 153600 )); then
+            fatal "ESP ($esp_mnt) has critically low space ($((avail_kb / 1024))MB free). Mid-transaction kernel generation will fail. Clear space before proceeding."
+        fi
+    fi
 }
 
 preflight_checks
