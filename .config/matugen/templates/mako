@@ -26,15 +26,18 @@ text-color={{colors.error.default.hex}}
 # ======================================
 [app-name=OSD]
 anchor=bottom-center
-# Margin: Top, Right, Bottom, Left. Lifts the OSD off the bottom edge.
-margin=0,0,80,0
+
+# outer-margin: Top, Right, Bottom, Left.
+# This physically pushes the Wayland surface 150px up from the bottom monitor edge.
+outer-margin=0,0,30,0
+
+# Reset standard margin so it doesn't compound the spacing
+margin=0
 
 # -- Typography & Formatting --
 text-alignment=center
 
 # -- Contrast Override --
-# Forces a distinct, high-contrast palette specifically for the hardware overlay
-# so text remains legible against both the background and the progress fill.
 background-color={{colors.surface.default.hex}}cc
 progress-color={{colors.primary_container.default.hex}}
 text-color={{colors.on_surface.default.hex}}
