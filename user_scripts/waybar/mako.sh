@@ -1,42 +1,67 @@
 #!/usr/bin/env bash
+# Execution constraints for ultimate reliability and safety
+set -euo pipefail
 
-# Fetch buffers and mode state
-ACTIVE=$(makoctl list -j 2>/dev/null || echo "[]")
-HISTORY=$(makoctl history -j 2>/dev/null || echo "[]")
-DND_STATE=$(makoctl mode | grep 'do-not-disturb')
+# Parse arguments
+MODE="horizontal"
+for arg in "$@"; do
+    case "$arg" in
+        --vertical) MODE="vertical" ;;
+        --horizontal) MODE="horizontal" ;;
+    esac
+done
 
-[[ -z "$ACTIVE" ]] && ACTIVE="[]"
-[[ -z "$HISTORY" ]] && HISTORY="[]"
+# Fetch buffers safely with DBus IPC timeout protection (prevents Waybar thread locks)
+ACTIVE=$(timeout 1 makoctl list -j 2>/dev/null || true)
+ACTIVE=${ACTIVE:-[]}
 
-BLACKLIST_FILE="${XDG_RUNTIME_DIR:-/tmp}/mako_rofi_blacklist"
-BLACKLIST_RAW=$(cat "$BLACKLIST_FILE" 2>/dev/null || echo "")
+HISTORY=$(timeout 1 makoctl history -j 2>/dev/null || true)
+HISTORY=${HISTORY:-[]}
 
-# Calculate the true count
-COUNT=$(jq -r -n \
-  --argjson active "$ACTIVE" \
-  --argjson history "$HISTORY" \
-  --arg bl "$BLACKLIST_RAW" '
-  ($bl | split("\n") | map(select(. != ""))) as $blacklisted_ids
-  | ($active + $history) 
-  | unique_by(.id) 
-  | map(select(.summary != null and .summary != "")) 
-  | map(select((.id | tostring) as $id_str | $blacklisted_ids | index($id_str) | not))
-  | length
-')
-
-# Dynamically output JSON based on DND state and Count
-if [[ -n "$DND_STATE" ]]; then
-    # DND is ENABLED
-    if [[ "$COUNT" -eq 0 ]]; then
-        echo '{"text": "󰂛", "tooltip": "Do Not Disturb (0 pending)", "class": "dnd"}'
-    else
-        echo '{"text": "󰂛 '"$COUNT"'", "tooltip": "Do Not Disturb ('"$COUNT"' pending)", "class": "dnd-pending"}'
-    fi
-else
-    # DND is DISABLED
-    if [[ "$COUNT" -eq 0 ]]; then
-        echo '{"text": "󰂚 0", "tooltip": "No notifications", "class": "empty"}'
-    else
-        echo '{"text": "󰂚 '"$COUNT"'", "tooltip": "'"$COUNT"' pending notifications", "class": "pending"}'
-    fi
+# Fetch mode and evaluate DND purely in-memory
+MAKO_MODE=$(timeout 1 makoctl mode 2>/dev/null || true)
+DND_STATE=""
+if [[ "$MAKO_MODE" =~ "do-not-disturb" ]]; then
+    DND_STATE="true"
 fi
+
+# Define blacklist target and read securely
+BLACKLIST_FILE="${XDG_RUNTIME_DIR:-/tmp}/mako_rofi_blacklist"
+BLACKLIST_RAW=""
+if [[ -r "$BLACKLIST_FILE" ]]; then
+    BLACKLIST_RAW=$(<"$BLACKLIST_FILE" 2>/dev/null) || true
+fi
+
+# Unified O(1) JSON Processing & Native Serialization via jq
+jq -c -n \
+    --argjson active "$ACTIVE" \
+    --argjson history "$HISTORY" \
+    --arg bl "$BLACKLIST_RAW" \
+    --arg dnd "$DND_STATE" \
+    --arg mode "$MODE" '
+    
+    # 1. Construct O(1) lookup dictionary for blacklisted IDs
+    ($bl | split("\n") | map(select(length > 0)) | reduce .[] as $id ({}; .[$id] = true)) as $blacklist_dict
+    
+    # 2. Calculate true pending count in a single filtered pass
+    | ($active + $history) 
+    | unique_by(.id) 
+    | map(select(.summary != null and .summary != "")) 
+    | map(select($blacklist_dict[.id | tostring] | not))
+    | length as $count
+    
+    # 3. Native JSON structural generation based on parsed arguments
+    | if ($dnd != "") then
+        {
+            "text": (if $mode == "vertical" then (if $count == 0 then "0\n󰂛" else "\($count)\n󰂛" end) else (if $count == 0 then "󰂛" else "󰂛 \($count)" end) end),
+            "tooltip": "Do Not Disturb (\($count) pending)",
+            "class": (if $count == 0 then "dnd" else "dnd-pending" end)
+        }
+      else
+        {
+            "text": (if $mode == "vertical" then (if $count == 0 then "0\n󰂚" else "\($count)\n󰂚" end) else (if $count == 0 then "󰂚 0" else "󰂚 \($count)" end) end),
+            "tooltip": (if $count == 0 then "No notifications" else "\($count) pending notifications" end),
+            "class": (if $count == 0 then "empty" else "pending" end)
+        }
+      end
+'

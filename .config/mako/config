@@ -33,7 +33,6 @@ include=~/.config/matugen/generated/mako-colors
 # Drops all incoming notifications silently into the history buffer
 [mode=do-not-disturb]
 invisible=1
-on-notify=none
 
 # Allow critical system notifications to punch through DND
 [mode=do-not-disturb urgency=critical]
@@ -60,15 +59,11 @@ ignore-timeout=1
 [app-name=Spotify]
 invisible=1
 
-# 2. The "Scripting Bypass" for Do Not Disturb
-[mode=do-not-disturb app-name=notify-send]
-invisible=0
-
-# 3. Auto-Execute on Receipt (Example)
+# 2. Auto-Execute on Receipt (Example)
 # If a backup script sends a failure notice, run a recovery bash script instantly
 # Uses ~ to ensure portability across different users' machines
-[app-name=SystemBackup summary~="Failed"]
-on-notify=exec ~/.local/bin/trigger-recovery.sh
+# [app-name=SystemBackup summary~="Failed"]
+# on-notify=exec sh -c '~/.local/bin/trigger-recovery.sh & pkill -RTMIN+8 waybar'
 
 # 4. Visual Overrides for Specific Apps
 # Make screenshot thumbnails massive so you can verify what you clipped
