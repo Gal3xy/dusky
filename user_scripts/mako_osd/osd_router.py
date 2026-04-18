@@ -12,21 +12,16 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 SYNC_ID = "sys-osd"
 ROUTER_SCRIPT = os.path.expanduser("~/user_scripts/mako_osd/osd_router.sh")
 
+# Set to True if you remap CapsLock to Escape/Ctrl in Hyprland config
+IGNORE_RAW_CAPSLOCK = False 
+
 # Retain strong references to prevent mid-execution garbage collection of tasks
 _active_tasks: Set[asyncio.Task] = set()
-
-# Track actively monitored device nodes to prevent duplicate tasks from udev spam
 _monitored_devices: Set[str] = set()
-
-# Track active debounced actions to prevent subprocess bombs on key-hold
 _active_actions: Set[str] = set()
 
 
 async def _safe_notify(icon: str, title: str) -> None:
-    """
-    Fire-and-forget notification dispatch. The synchronous D-Bus hint 
-    is handled natively by Mako/Dunst, replacing overlapping OSDs immediately.
-    """
     process = await asyncio.create_subprocess_exec(
         "notify-send", "-a", "OSD", 
         "-h", f"string:x-canonical-private-synchronous:{SYNC_ID}", 
@@ -38,10 +33,6 @@ async def _safe_notify(icon: str, title: str) -> None:
 
 
 async def trigger_router(action: str, step: str = "10") -> None:
-    """
-    Dispatches the stateless bash router script with active debouncing.
-    Drops identical rapid-repeat events if a subprocess is already executing.
-    """
     if action in _active_actions:
         return
     _active_actions.add(action)
@@ -53,17 +44,12 @@ async def trigger_router(action: str, step: str = "10") -> None:
 
 
 def dispatch_notification(icon: str, title: str) -> None:
-    """Spawns notification task and registers a strong reference."""
     task = asyncio.create_task(_safe_notify(icon, title))
     _active_tasks.add(task)
     task.add_done_callback(_active_tasks.discard)
 
 
 async def monitor_upower_dbus() -> None:
-    """
-    Listens to UPower D-Bus signals for autonomous KbdBacklight changes.
-    Catches Asus/Mac laptops that bypass evdev entirely for hardware-managed keys.
-    """
     try:
         process = await asyncio.create_subprocess_exec(
             "gdbus", "monitor", "--system", 
@@ -89,10 +75,6 @@ async def monitor_upower_dbus() -> None:
 
 
 async def monitor_device(dev_path: str) -> None:
-    """
-    Monitors a specific evdev device node. Virtual ACPI/WMI devices frequently 
-    emit EV_KEY backlight events without advertising them, so we skip capability filtering.
-    """
     if dev_path in _monitored_devices:
         return
     _monitored_devices.add(dev_path)
@@ -104,7 +86,7 @@ async def monitor_device(dev_path: str) -> None:
         async for event in device.async_read_loop():
             # 1. Handle Stateful Hardware LEDs (Lock Keys)
             if event.type == ecodes.EV_LED:
-                if event.code == ecodes.LED_CAPSL:
+                if event.code == ecodes.LED_CAPSL and not IGNORE_RAW_CAPSLOCK:
                     state = "ON" if event.value == 1 else "OFF"
                     dispatch_notification(f"caps-lock-{state.lower()}", f"Caps Lock: {state}")
                 elif event.code == ecodes.LED_NUML:
@@ -145,25 +127,21 @@ async def main() -> None:
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue[pyudev.Device] = asyncio.Queue()
     
-    # Filter spurious epoll wakeups natively before queue ingestion
     loop.add_reader(
         monitor.fileno(), 
         lambda: (dev := monitor.poll()) is not None and queue.put_nowait(dev)
     )
 
-    # Start the UPower D-Bus Monitor for autonomous hardware key routing
     upower_task = asyncio.create_task(monitor_upower_dbus())
     _active_tasks.add(upower_task)
     upower_task.add_done_callback(_active_tasks.discard)
 
-    # Enumerate and attach to currently connected evdev devices
     for device in context.list_devices(subsystem='input'):
         if device.device_node:
             task = asyncio.create_task(monitor_device(device.device_node))
             _active_tasks.add(task)
             task.add_done_callback(_active_tasks.discard)
 
-    # Maintain daemon lifecycle independently
     while True:
         device = await queue.get()
         if device and device.action == 'add' and device.device_node:

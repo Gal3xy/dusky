@@ -11,7 +11,6 @@ notify() {
     local val="$3"
     
     if [[ -n "$val" ]]; then
-        # Includes int:value for Mako/Dunst progress bar rendering
         notify-send -a "OSD" -h string:x-canonical-private-synchronous:"$SYNC_ID" -h int:value:"$val" -i "$icon" "$title"
     else
         notify-send -a "OSD" -h string:x-canonical-private-synchronous:"$SYNC_ID" -i "$icon" "$title"
@@ -24,7 +23,6 @@ main() {
 
     case "$action" in
         --vol-up|--vol-down)
-            # Guarantee atomic read-modify-write across concurrent subprocesses
             exec {lock_fd}> "${XDG_RUNTIME_DIR:-/tmp}/osd_audio.lock"
             flock -x "$lock_fd"
 
@@ -38,10 +36,10 @@ main() {
             fi
             
             local vol
-            vol=$(wpctl get-volume @DEFAULT_AUDIO_SINK@ | awk '{print int($2 * 100)}')
+            vol=$(wpctl get-volume @DEFAULT_AUDIO_SINK@ | awk '{print int($2 * 100 + 0.5)}')
             notify "$icon" "Volume: ${vol}%" "$vol"
             
-            exec {lock_fd}>&- # Release lock
+            exec {lock_fd}>&-
             ;;
 
         --vol-mute)
@@ -53,7 +51,7 @@ main() {
                 notify "audio-volume-muted" "Audio Muted" ""
             else
                 local vol
-                vol=$(wpctl get-volume @DEFAULT_AUDIO_SINK@ | awk '{print int($2 * 100)}')
+                vol=$(wpctl get-volume @DEFAULT_AUDIO_SINK@ | awk '{print int($2 * 100 + 0.5)}')
                 notify "audio-volume-high" "Audio Unmuted" "$vol"
             fi
             
@@ -70,7 +68,6 @@ main() {
             ;;
 
         --bright-up|--bright-down)
-            # Serialize backlight state interactions
             exec {lock_fd}> "${XDG_RUNTIME_DIR:-/tmp}/osd_display.lock"
             flock -x "$lock_fd"
 
@@ -81,7 +78,7 @@ main() {
             fi
             
             local bright
-            bright=$(brightnessctl -m | awk -F, '{print int($4)}')
+            bright=$(brightnessctl -m | awk -F, '{print int($4 + 0.5)}')
             notify "display-brightness" "Brightness: ${bright}%" "$bright"
             
             exec {lock_fd}>&-
@@ -103,14 +100,13 @@ main() {
             fi
 
             local kbd_bright
-            kbd_bright=$(brightnessctl --device="$kbd_dev" -m 2>/dev/null | awk -F, '{print int($4)}')
+            kbd_bright=$(brightnessctl --device="$kbd_dev" -m 2>/dev/null | awk -F, '{print int($4 + 0.5)}')
             [[ -z "$kbd_bright" ]] && kbd_bright=0
 
             notify "keyboard-brightness" "Kbd Brightness: ${kbd_bright}%" "$kbd_bright"
             ;;
 
         --kbd-bright-show)
-            # Executed when hardware changes brightness autonomously (caught via UPower D-Bus)
             local kbd_dev
             kbd_dev=$(brightnessctl -l | awk -F"'" '/kbd_backlight/ {print $2; exit}')
             
@@ -119,15 +115,15 @@ main() {
             fi
 
             local kbd_bright
-            kbd_bright=$(brightnessctl --device="$kbd_dev" -m 2>/dev/null | awk -F, '{print int($4)}')
+            kbd_bright=$(brightnessctl --device="$kbd_dev" -m 2>/dev/null | awk -F, '{print int($4 + 0.5)}')
             [[ -z "$kbd_bright" ]] && kbd_bright=0
 
             notify "keyboard-brightness" "Kbd Brightness: ${kbd_bright}%" "$kbd_bright"
             ;;
 
         --play-pause|--next|--prev|--stop)
-            local old_trackid
-            old_trackid=$(playerctl metadata mpris:trackid 2>/dev/null)
+            local old_meta
+            old_meta=$(playerctl metadata --format "{{ artist }} - {{ title }}" 2>/dev/null)
 
             case "$action" in
                 --play-pause) playerctl play-pause ;;
@@ -136,22 +132,20 @@ main() {
                 --stop)       playerctl stop ;;
             esac
             
-            local status metadata new_trackid
-            # Active D-Bus fast-poll (up to 250ms latency tolerance)
-            for ((i=0; i<25; i++)); do
+            local status metadata
+            # 100 iterations * 10ms = 1.0 second max timeout for network streams
+            for ((i=0; i<100; i++)); do
                 status=$(playerctl status 2>/dev/null)
-                new_trackid=$(playerctl metadata mpris:trackid 2>/dev/null)
+                metadata=$(playerctl metadata --format "{{ artist }} - {{ title }}" 2>/dev/null)
                 
-                if [[ "$new_trackid" != "$old_trackid" ]] || \
+                if [[ "$metadata" != "$old_meta" ]] || \
                    [[ "$action" == "--play-pause" && -n "$status" ]] || \
                    [[ "$action" == "--stop" && "$status" == "Stopped" ]]; then
                     break
                 fi
-                # Zero-fork native bash sleep (10ms)
                 read -r -t 0.01 <> <(:)
             done
             
-            metadata=$(playerctl metadata --format "{{ artist }} - {{ title }}" 2>/dev/null)
             [[ -z "$metadata" || "$metadata" == " - " ]] && metadata="Unknown Track"
 
             if [[ "$status" == "Playing" ]]; then
