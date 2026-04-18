@@ -31,6 +31,7 @@ readonly -a REPO_TARGETS=(
   fcitx5
   fcitx5-gtk
   fcitx5-qt
+  network-manager-applet
 )
 
 # AUR Packages
