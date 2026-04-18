@@ -1,6 +1,7 @@
 # ======================================
 # GLOBAL DAEMON PARAMETERS
 # ======================================
+on-notify=exec pkill -RTMIN+8 waybar
 font=monospace 10
 width=350
 height=150
@@ -16,12 +17,27 @@ max-visible=5
 layer=overlay
 anchor=bottom-left
 sort=-time
+history=1
+max-history=50
+on-button-left=invoke-default-action
 
 # ======================================
 # MATUGEN THEME INJECTION
 # ======================================
 # MUST remain in the global scope (before any criteria blocks).
 include=~/.config/matugen/generated/mako-colors
+
+# ======================================
+# DO NOT DISTURB MODE
+# ======================================
+# Drops all incoming notifications silently into the history buffer
+[mode=do-not-disturb]
+invisible=1
+on-notify=none
+
+# Allow critical system notifications to punch through DND
+[mode=do-not-disturb urgency=critical]
+invisible=0
 
 # ======================================
 # CRITERIA: TIMEOUTS & URGENCY
@@ -54,12 +70,7 @@ invisible=0
 [app-name=SystemBackup summary~="Failed"]
 on-notify=exec ~/.local/bin/trigger-recovery.sh
 
-# 4. Click-to-Execute (Interactive Buttons)
-# Click to dismiss the specific notification, then launch a holding Kitty window with pacman
-[summary~="Update System"]
-on-button-left=exec makoctl dismiss -n "$id" && uwsm app -- kitty --hold sudo pacman -Syu
-
-# 5. Visual Overrides for Specific Apps
+# 4. Visual Overrides for Specific Apps
 # Make screenshot thumbnails massive so you can verify what you clipped
 [app-name=grimblast]
 max-icon-size=84
@@ -78,10 +89,6 @@ format=<b>%s</b>\n%b
 # # 93% opacity (ee) on the border for a subtle edge
 # border-color={{colors.tertiary_container.default.hex}}ee
 # progress-color={{colors.primary.default.hex}}
-#
-# [mode=do-not-disturb]
-# invisible=1
-# on-notify=none
 #
 # [mode=silent]
 # on-notify=none
