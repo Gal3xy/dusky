@@ -1112,9 +1112,8 @@ handle_mouse() {
     if (( button == 64 )); then navigate -1; return 0; fi
     if (( button == 65 )); then navigate 1; return 0; fi
 
+    # Ignore button releases entirely
     if [[ "$terminator" != "M" ]]; then return 0; fi
-    button=$(( button & ~32 ))
-    if (( button != 0 && button != 1 && button != 2 )); then return 0; fi
 
     if (( y == TAB_ROW )); then
         if (( CURRENT_VIEW == 0 )); then
