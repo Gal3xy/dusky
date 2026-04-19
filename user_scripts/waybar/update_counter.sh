@@ -18,16 +18,26 @@ MODE="horizontal"
 SHOW_PACMAN=0
 SHOW_AUR=0
 SHOW_DUSKY=0
-TIMEOUT_SEC=15 # Hard kill any network fetch after 15 seconds
+MODULE_ORDER=() # Tracks the exact CLI argument sequence
+TIMEOUT_SEC=15  # Hard kill any network fetch after 15 seconds
 
-# Parse Arguments
+# Parse Arguments (Preserves user-defined order)
 for arg in "$@"; do
     case "$arg" in
         --vertical) MODE="vertical" ;;
         --horizontal) MODE="horizontal" ;;
-        --pacman) SHOW_PACMAN=1 ;;
-        --aur) SHOW_AUR=1 ;;
-        --dusky) SHOW_DUSKY=1 ;;
+        --pacman) 
+            [[ $SHOW_PACMAN -eq 0 ]] && MODULE_ORDER+=("pacman")
+            SHOW_PACMAN=1 
+            ;;
+        --aur) 
+            [[ $SHOW_AUR -eq 0 ]] && MODULE_ORDER+=("aur")
+            SHOW_AUR=1 
+            ;;
+        --dusky) 
+            [[ $SHOW_DUSKY -eq 0 ]] && MODULE_ORDER+=("dusky")
+            SHOW_DUSKY=1 
+            ;;
         -h|--help)
             printf "Usage: %s [--horizontal|--vertical] [--pacman] [--aur] [--dusky]\n" "${0##*/}"
             exit 0
@@ -103,8 +113,6 @@ wait
 # Data Sanitization (Zero-Fork Nameref Optimization)
 # ---------------------------------------------------------
 # Utilizes Bash 5+ namerefs (local -n) to pass variables by reference.
-# This assigns the sanitized value directly to the parent scope, 
-# bypassing the need for slow command substitution subshells $().
 sanitize_count() {
     local file="$1"
     local -n ref_var="$2"
@@ -112,14 +120,11 @@ sanitize_count() {
     
     if [[ -s "$file" ]]; then
         local raw=""
-        # || true guarantees set -e will not prematurely abort on EOF/missing newlines
         read -r raw < "$file" || true
         
         # Strict validation: Only accept pure digit payloads
         if [[ "$raw" =~ ^[0-9]+$ ]]; then
-            # Base-10 coercion (10#) mathematically strips leading zeros in pure Bash.
-            # This definitively prevents both Bash octal evaluation errors and 
-            # jq syntax crashes, as JSON strictly prohibits leading zeros.
+            # Base-10 coercion (10#) strips leading zeros in pure Bash
             ref_var=$(( 10#$raw ))
         fi
     fi
@@ -134,11 +139,11 @@ sanitize_count "$TMP_DIR/dsk" DSK_COUNT
 # ---------------------------------------------------------
 # Unified JSON Processing via jq
 # ---------------------------------------------------------
+# We pass the MODULE_ORDER array as a space-separated string to jq.
+# jq handles the dynamic mapping, guaranteeing visual layout matches CLI order.
 jq -c -n \
     --arg mode "$MODE" \
-    --arg pac_show "$SHOW_PACMAN" \
-    --arg aur_show "$SHOW_AUR" \
-    --arg dsk_show "$SHOW_DUSKY" \
+    --arg order "${MODULE_ORDER[*]:-}" \
     --argjson pac_c "$PAC_COUNT" \
     --argjson aur_c "$AUR_COUNT" \
     --argjson dsk_c "$DSK_COUNT" '
@@ -146,7 +151,7 @@ jq -c -n \
     # Define strict 3-char clamping function
     def clamp: if . > 999 then 999 else . end;
     
-    "󰣇" as $pac_icon | "󰏔" as $aur_icon | "󰒋" as $dsk_icon | "󰸞" as $check_icon |
+    "󰣇" as $pac_icon | "󰏔" as $aur_icon | "" as $dsk_icon | "󰸞" as $check_icon |
 
     ($pac_c + $aur_c + $dsk_c) as $total |
 
@@ -157,12 +162,16 @@ jq -c -n \
             "class": "updated"
         }
     else
-        # Construct array of active modules. Order determines visual placement.
-        [
-            (if $dsk_show == "1" and $dsk_c > 0 then { c: ($dsk_c | clamp), i: $dsk_icon, name: "Dusky" } else empty end),
-            (if $pac_show == "1" and $pac_c > 0 then { c: ($pac_c | clamp), i: $pac_icon, name: "Pacman" } else empty end),
-            (if $aur_show == "1" and $aur_c > 0 then { c: ($aur_c | clamp), i: $aur_icon, name: "AUR" } else empty end)
-        ] as $items |
+        # Iterate strictly over the CLI argument order
+        ($order | split(" ") | map(
+            if . == "pacman" and $pac_c > 0 then 
+                { c: ($pac_c | clamp), i: $pac_icon, name: "Pacman", desc: "Official Arch Linux Packages" } 
+            elif . == "aur" and $aur_c > 0 then 
+                { c: ($aur_c | clamp), i: $aur_icon, name: "AUR", desc: "Arch User Repository Packages" }
+            elif . == "dusky" and $dsk_c > 0 then 
+                { c: ($dsk_c | clamp), i: $dsk_icon, name: "Dusky", desc: "Custom Environment Commits" }
+            else empty end
+        )) as $items |
 
         # Handle structural rendering based on requested axis
         (if $mode == "vertical" then
@@ -171,12 +180,12 @@ jq -c -n \
             ($items | map("\(.i) \(.c)") | join("  "))
         end) as $text |
 
-        # Build intuitive tooltip
-        ($items | map("\(.name): \(.c)") | join("\n")) as $tooltip |
+        # Build intuitive, structural tooltip
+        ($items | map("• \(.name): \(.c)\n  └ \(.desc)") | join("\n\n")) as $tooltip_details |
 
         {
             "text": $text,
-            "tooltip": "Pending Updates:\n\($tooltip)",
+            "tooltip": "Pending System Updates (Total: \($total))\n────────────────────────────\n\($tooltip_details)",
             "class": "pending"
         }
     end

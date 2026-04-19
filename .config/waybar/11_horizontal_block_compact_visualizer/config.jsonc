@@ -78,11 +78,12 @@
   },
 
   "custom/updates": {
-    "format": "󰏔 {}",
-    "exec": "checkupdates 2>/dev/null | wc -l || echo 0",
-    "interval": 3600,
+    "format": "{}",
+    "exec": "~/user_scripts/waybar/update_counter.sh --pacman --aur --dusky",
+    "return-type": "json",
+    "interval": 7200,
     "on-click": "kitty sh -c 'command -v yay >/dev/null && yay || paru'",
-    "tooltip-format": "System Updates"
+    "escape": true
   },
 
   "custom/notification": {
