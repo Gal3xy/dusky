@@ -524,6 +524,11 @@ write_value_to_file() {
         return s
     }
 
+    function leading_ws(s) {
+        match(s, /^[[:space:]]*/)
+        return substr(s, RSTART, RLENGTH)
+    }
+
     function current_scope(    i, out) {
         out = ""
         for (i = 1; i <= depth; i++) {
@@ -544,32 +549,57 @@ write_value_to_file() {
         }
     }
 
+    function note_target_close() {
+        if (current_scope() == ENVIRON["TARGET_SCOPE"]) {
+            target_close_nr = NR
+            if (current_block_insert_indent != "") {
+                target_insert_indent = current_block_insert_indent
+            } else {
+                target_insert_indent = current_target_open_indent "    "
+            }
+        }
+    }
+
     function consume_leading_structure(s,    token, block_str) {
+        leading_structure_seen = 0
+
         while (1) {
             if (match(s, /^[[:space:]]*\}/)) {
+                leading_structure_seen = 1
+                note_target_close()
                 pop_block()
                 s = substr(s, RSTART + RLENGTH)
                 continue
             }
 
             if (match(s, /^[[:space:]]*[a-zA-Z0-9_.:-]+[[:space:]]*\{/)) {
+                leading_structure_seen = 1
                 token = substr(s, RSTART, RLENGTH)
                 block_str = token
                 sub(/^[[:space:]]*/, "", block_str)
                 sub(/[[:space:]]*\{$/, "", block_str)
+
                 push_block(trim(block_str))
+
+                if (current_scope() == ENVIRON["TARGET_SCOPE"]) {
+                    current_target_open_indent = leading_ws(lines[NR])
+                    current_block_insert_indent = ""
+                }
+
                 s = substr(s, RSTART + RLENGTH)
                 continue
             }
 
             break
         }
+
         return s
     }
 
     function consume_trailing_closes(s) {
         while (match(s, /[[:space:]]*\}[[:space:]]*$/)) {
             sub(/[[:space:]]*\}[[:space:]]*$/, "", s)
+            note_target_close()
             pop_block()
         }
         return s
@@ -603,6 +633,10 @@ write_value_to_file() {
     BEGIN {
         depth = 0
         target_nr = 0
+        target_close_nr = 0
+        target_insert_indent = ""
+        current_target_open_indent = ""
+        current_block_insert_indent = ""
     }
 
     {
@@ -635,6 +669,10 @@ write_value_to_file() {
                     target_nr = NR
                 }
 
+                if (assignment_scope == ENVIRON["TARGET_SCOPE"] && current_block_insert_indent == "" && !leading_structure_seen) {
+                    current_block_insert_indent = leading_ws(lines[NR])
+                }
+
                 v = consume_trailing_closes(v)
             }
             next
@@ -653,13 +691,34 @@ write_value_to_file() {
             exit 0
         }
 
-        exit 1
+        if (ENVIRON["TARGET_SCOPE"] == "") {
+            for (i = 1; i <= NR; i++) {
+                print lines[i]
+            }
+            print ENVIRON["TARGET_KEY"] " = " ENVIRON["NEW_VALUE"]
+            exit 0
+        }
+
+        if (!target_close_nr) {
+            exit 1
+        }
+
+        for (i = 1; i <= NR; i++) {
+            if (i == target_close_nr) {
+                print target_insert_indent ENVIRON["TARGET_KEY"] " = " ENVIRON["NEW_VALUE"]
+            }
+            print lines[i]
+        }
     }
     ' "$CONFIG_FILE" > "$_TMPFILE" || {
         rm -f -- "$_TMPFILE" 2>/dev/null || :
         _TMPFILE=""
         _TMPMODE=""
-        set_status "Key not found: ${key}"
+        if [[ -n "$block" ]]; then
+            set_status "Scope not found: ${block}"
+        else
+            set_status "Write failed: ${key}"
+        fi
         return 1
     }
 
@@ -682,18 +741,6 @@ write_value_to_file() {
     CONFIG_CACHE["$cache_key"]="$new_val"
     LAST_WRITE_CHANGED=1
     return 0
-}
-
-# --- Context Helpers ---
-
-get_active_context() {
-    if (( CURRENT_VIEW == 0 )); then
-        REPLY_CTX="${CURRENT_TAB}"
-        REPLY_REF="TAB_ITEMS_${CURRENT_TAB}"
-    else
-        REPLY_CTX="${CURRENT_MENU_ID}"
-        REPLY_REF="SUBMENU_ITEMS_${CURRENT_MENU_ID}"
-    fi
 }
 
 load_active_values() {
@@ -1475,6 +1522,11 @@ handle_input_router() {
 }
 
 main() {
+    if (( BASH_VERSINFO[0] < 5 )); then
+        log_err "Bash 5.0+ required"
+        exit 1
+    fi
+
     if [[ ! -t 0 ]]; then
         log_err "TTY required"
         exit 1
