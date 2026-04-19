@@ -51,6 +51,7 @@ MENU_PAYLOAD=$(jq -r -n \
   | reverse 
   | .[] 
   | select(.summary != null and .summary != "") 
+  | select(.app_name != "OSD")
   
   # Filter out blacklisted IDs
   | select((.id | tostring) as $id_str | $blacklisted_ids | index($id_str) | not)

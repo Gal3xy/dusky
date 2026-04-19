@@ -46,7 +46,7 @@ jq -c -n \
     # 2. Calculate true pending count in a single filtered pass
     | ($active + $history) 
     | unique_by(.id) 
-    | map(select(.summary != null and .summary != "")) 
+    | map(select(.summary != null and .summary != "" and .app_name != "OSD")) 
     | map(select($blacklist_dict[.id | tostring] | not))
     | length as $count
     
