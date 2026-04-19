@@ -1291,8 +1291,9 @@ handle_mouse() {
     # Ignore button releases entirely
     if [[ "$terminator" != "M" ]]; then return 0; fi
 
-    # Ignore drag-motion reports (bit 0x20 set, codes 32–34 in non-wheel range)
-    if (( (button & 32) != 0 )); then return 0; fi
+    # Strip the drag-motion bit (0x20) to map drag events back to their base buttons
+    # Left drag (32) -> 0, Middle drag (33) -> 1, Right drag (34) -> 2
+    button=$(( button & ~32 ))
 
     # Only react to recognised mouse buttons (left=0, middle=1, right=2)
     if (( button != 0 && button != 1 && button != 2 )); then return 0; fi
