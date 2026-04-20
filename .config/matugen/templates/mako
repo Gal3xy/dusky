@@ -43,5 +43,6 @@ progress-color={{colors.primary_container.default.hex}}
 text-color={{colors.on_surface.default.hex}}
 
 # Optional: Gives the OSD a slightly more defined border to stand out
-border-size=3
+border-size=0
+border-radius=22
 border-color={{colors.primary.default.hex}}

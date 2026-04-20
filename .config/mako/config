@@ -45,10 +45,10 @@ invisible=0
 default-timeout=2000
 
 [urgency=normal]
-default-timeout=4000
+default-timeout=3000
 
 [urgency=critical]
-default-timeout=6000
+default-timeout=5000
 
 # ======================================
 # CRITERIA: AUTOMATION & BEHAVIOR
@@ -94,8 +94,9 @@ format=<b>%s</b>\n%b
 # ======================================
 # OSD HARDWARE OVERLAY
 # ======================================
-# [app-name=OSD]
+[app-name=OSD]
 # anchor=bottom-center
 # Optional: You can also strip the border or adjust margins specifically for the OSD here
 # border-size=0
 # margin=0,0,50,0
+default-timeout=1000
