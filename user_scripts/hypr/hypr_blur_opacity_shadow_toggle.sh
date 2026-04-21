@@ -1,16 +1,7 @@
 #!/usr/bin/env bash
 #==============================================================================
 # Hyprland Visuals Controller (Blur, Shadow, Opacity)
-#
-# USAGE:
-#   ./script.sh            -> Toggles state based on current config
-#   ./script.sh on         -> Forces visuals ON (Blur, Shadow, Transparency)
-#   ./script.sh off        -> Forces visuals OFF (No Blur, No Shadow, Opaque)
-#   ./script.sh --help     -> Show usage information
-#
-# REQUIREMENTS:
-#   - hyprctl (Hyprland compositor must be running)
-#   - notify-send (optional, for desktop notifications)
+# Architecture: Zero-Corruption Atomic Writes, Symlink Safe, Regex Parsing
 #==============================================================================
 
 # Strict mode: exit on error, undefined vars, and pipeline failures
@@ -22,15 +13,38 @@ set -o pipefail
 readonly CONFIG_FILE="${HOME}/.config/hypr/edit_here/source/appearance.conf"
 readonly STATE_FILE="${HOME}/.config/dusky/settings/opacity_blur"
 
+# Mako Targets
+readonly MAKO_TEMPLATE="${HOME}/.config/matugen/templates/mako"
+readonly MAKO_GENERATED="${HOME}/.config/matugen/generated/mako-colors"
+
 # Visual Constants
 readonly OP_ACTIVE_ON="0.8"
 readonly OP_INACTIVE_ON="0.6"
 readonly OP_ACTIVE_OFF="1.0"
 readonly OP_INACTIVE_OFF="1.0"
 
+# Mako Alpha Constants (Hex)
+# When Blur is ON, Mako drops to 03 (transparent). When Blur is OFF, Mako handles opacity at cc (80%).
+readonly MAKO_ALPHA_ON="03"
+readonly MAKO_ALPHA_OFF="cc"
+
+# --- Global State for Signal Trapping ---
+declare -a TEMP_FILES_TO_CLEAN=()
+
 # --- Helper Functions ---
 
-# Print error to stderr and optionally send notification, then exit
+cleanup_temps() {
+    for tmp in "${TEMP_FILES_TO_CLEAN[@]}"; do
+        [[ -f "$tmp" ]] && rm -f "$tmp"
+    done
+}
+
+# Cascading Signal Interception
+trap cleanup_temps EXIT
+trap 'cleanup_temps; exit 129' HUP
+trap 'cleanup_temps; exit 130' INT
+trap 'cleanup_temps; exit 143' TERM
+
 die() {
     local message="$1"
     printf 'Error: %s\n' "$message" >&2
@@ -40,7 +54,6 @@ die() {
     exit 1
 }
 
-# Send non-critical notification (fails silently if notify-send unavailable)
 notify() {
     local message="$1"
     if command -v notify-send &>/dev/null; then
@@ -51,69 +64,87 @@ notify() {
     fi
 }
 
+# --- The Architecture: Atomic, Symlink-Safe Sed ---
+atomic_sed() {
+    local target_file="$1"
+    shift # Remaining arguments are sed parameters
+
+    # 1. Path Resolution (Symlink Safe)
+    local actual_target="${target_file}"
+    if [[ -L "${target_file}" ]]; then
+        actual_target=$(realpath -m "${target_file}")
+    fi
+
+    [[ -w "${actual_target}" ]] || die "Write permission denied for ${actual_target}"
+
+    # 2. Secure Temporary Block Allocation
+    local target_dir="${actual_target%/*}"
+    local temp_file
+    temp_file=$(mktemp "${target_dir}/.hypr_toggle.XXXXXX") || die "Failed to allocate temp file."
+    
+    # Register temp file for trap cleanup
+    TEMP_FILES_TO_CLEAN+=("${temp_file}")
+
+    # 3. Metadata Cloning
+    command cp -pf "${actual_target}" "${temp_file}"
+
+    # 4. Surgical Editing (Running sed -i on the temp file)
+    if ! sed -i "$@" "${temp_file}" 2>&1; then
+        die "Failed to process sed commands on ${actual_target}"
+    fi
+
+    # 5. Targeted VFS Cache Flush
+    sync "${temp_file}" || true
+
+    # 6. Atomic Swap
+    if ! command mv -f "${temp_file}" "${actual_target}"; then
+        die "Atomic swap failed for ${actual_target}"
+    fi
+}
+
 # Robustly detect current blur state from config file using awk
 get_current_blur_state() {
     local state
+    local actual_config="${CONFIG_FILE}"
+    [[ -L "${CONFIG_FILE}" ]] && actual_config=$(realpath -m "${CONFIG_FILE}")
+
     state=$(awk '
         /^[[:space:]]*blur[[:space:]]*\{/ { in_block = 1; next }
         in_block && /^[[:space:]]*enabled[[:space:]]*=[[:space:]]*true/  { found = "on" }
         in_block && /^[[:space:]]*enabled[[:space:]]*=[[:space:]]*false/ { found = "off" }
         in_block && /\}/  { in_block = 0 }
         END { print (found ? found : "off") }
-    ' "$CONFIG_FILE" 2>/dev/null) || state="off"
+    ' "$actual_config" 2>/dev/null) || state="off"
     printf '%s' "$state"
 }
 
-# Display usage information
 show_help() {
     cat <<EOF
 Usage: ${0##*/} [OPTION]
 
 Control Hyprland visual effects (blur, shadow, opacity).
+Includes atomic, symlink-safe configuration writes.
 
 Options:
   on, enable, 1, true     Enable blur, shadow, and transparency
   off, disable, 0, false  Disable blur/shadow, set opacity to 1.0
   toggle                  Toggle based on current state (default)
-  -h, --help              Show this help message
-
-Configuration:
-  Config file: ${CONFIG_FILE}
-  
-  Opacity when ON:  active=${OP_ACTIVE_ON}, inactive=${OP_INACTIVE_ON}
-  Opacity when OFF: active=${OP_ACTIVE_OFF}, inactive=${OP_INACTIVE_OFF}
-
-Examples:
-  ${0##*/}           # Toggle current state
-  ${0##*/} on        # Enable all visual effects
-  ${0##*/} off       # Disable for performance
+  -h, --help              Show help
 EOF
 }
 
 # --- Pre-flight Checks ---
 
-# Validate config file
 [[ -e "$CONFIG_FILE" ]] || die "Config file not found: $CONFIG_FILE"
-[[ -f "$CONFIG_FILE" ]] || die "Config path is not a regular file: $CONFIG_FILE"
-[[ -r "$CONFIG_FILE" ]] || die "Config file not readable: $CONFIG_FILE"
-[[ -w "$CONFIG_FILE" ]] || die "Config file not writable: $CONFIG_FILE"
-
-# Verify hyprctl is available
-command -v hyprctl &>/dev/null || die "hyprctl not found in PATH. Is Hyprland installed?"
+command -v hyprctl &>/dev/null || die "hyprctl not found in PATH."
 
 # --- Parse Arguments ---
 
 TARGET_STATE=""
-
 case "${1:-toggle}" in
-    on|ON|enable|1|true|yes)
-        TARGET_STATE="on"
-        ;;
-    off|OFF|disable|0|false|no)
-        TARGET_STATE="off"
-        ;;
+    on|ON|enable|1|true|yes) TARGET_STATE="on" ;;
+    off|OFF|disable|0|false|no) TARGET_STATE="off" ;;
     toggle|"")
-        # Toggle based on current state
         if [[ "$(get_current_blur_state)" == "on" ]]; then
             TARGET_STATE="off"
         else
@@ -133,18 +164,20 @@ esac
 
 # --- Define Values Based on Target State ---
 
-declare NEW_ENABLED NEW_ACTIVE NEW_INACTIVE NOTIFY_MSG STATE_STRING
+declare NEW_ENABLED NEW_ACTIVE NEW_INACTIVE NEW_MAKO_ALPHA NOTIFY_MSG STATE_STRING
 
 if [[ "$TARGET_STATE" == "on" ]]; then
     NEW_ENABLED="true"
     NEW_ACTIVE="$OP_ACTIVE_ON"
     NEW_INACTIVE="$OP_INACTIVE_ON"
+    NEW_MAKO_ALPHA="$MAKO_ALPHA_ON"
     NOTIFY_MSG="Visuals: Max (Blur/Shadow ON)"
     STATE_STRING="True"
 else
     NEW_ENABLED="false"
     NEW_ACTIVE="$OP_ACTIVE_OFF"
     NEW_INACTIVE="$OP_INACTIVE_OFF"
+    NEW_MAKO_ALPHA="$MAKO_ALPHA_OFF"
     NOTIFY_MSG="Visuals: Performance (Blur/Shadow OFF)"
     STATE_STRING="False"
 fi
@@ -154,25 +187,26 @@ fi
 mkdir -p "$(dirname "$STATE_FILE")"
 printf '%s' "$STATE_STRING" > "$STATE_FILE"
 
-# --- Update Config File (Persistent Storage) ---
+# --- Update Config Files (Using Atomic Pipeline) ---
 
-# Using sed with address ranges to target specific blocks
-# [a-z][a-z]* ensures at least one letter is matched (not empty string)
-# Preserving original spacing style by using capture groups
-
-if ! sed -i \
+# Update Hyprland Config
+atomic_sed "$CONFIG_FILE" \
     -e "/^[[:space:]]*blur[[:space:]]*{/,/}/ s/\(enabled[[:space:]]*=[[:space:]]*\)[a-z][a-z]*/\1${NEW_ENABLED}/" \
     -e "/^[[:space:]]*shadow[[:space:]]*{/,/}/ s/\(enabled[[:space:]]*=[[:space:]]*\)[a-z][a-z]*/\1${NEW_ENABLED}/" \
     -e "s/^\([[:space:]]*active_opacity[[:space:]]*=[[:space:]]*\)[0-9][0-9.]*/\1${NEW_ACTIVE}/" \
-    -e "s/^\([[:space:]]*inactive_opacity[[:space:]]*=[[:space:]]*\)[0-9][0-9.]*/\1${NEW_INACTIVE}/" \
-    "$CONFIG_FILE" 2>&1; then
-    die "Failed to update config file: $CONFIG_FILE"
+    -e "s/^\([[:space:]]*inactive_opacity[[:space:]]*=[[:space:]]*\)[0-9][0-9.]*/\1${NEW_INACTIVE}/"
+
+# Update Mako Template (Strict regex for {{variable}}aa)
+if [[ -w "$MAKO_TEMPLATE" ]]; then
+    atomic_sed "$MAKO_TEMPLATE" "s/^\([[:space:]]*background-color={{[^}]*}}\)[0-9a-fA-F]\{2\}/\1${NEW_MAKO_ALPHA}/"
 fi
 
-# --- Apply Changes at Runtime via hyprctl ---
+# Update Mako Generated Config (Strict regex for #RRGGBBaa)
+if [[ -w "$MAKO_GENERATED" ]]; then
+    atomic_sed "$MAKO_GENERATED" "s/^\([[:space:]]*background-color=#[0-9a-fA-F]\{6\}\)[0-9a-fA-F]\{2\}/\1${NEW_MAKO_ALPHA}/"
+fi
 
-# Using 'keyword' for instant updates without compositor reload
-# Each command is allowed to fail independently (|| true) to ensure all are attempted
+# --- Apply Changes at Runtime ---
 
 declare -a HYPR_CMDS=(
     "decoration:blur:enabled ${NEW_ENABLED}"
@@ -183,15 +217,19 @@ declare -a HYPR_CMDS=(
 
 hypr_errors=0
 for cmd in "${HYPR_CMDS[@]}"; do
-    # shellcheck disable=SC2086  # Intentional word splitting
+    # shellcheck disable=SC2086
     if ! hyprctl keyword $cmd &>/dev/null; then
         ((hypr_errors++)) || true
     fi
 done
 
-# Warn if any hyprctl commands failed (but don't exit—file was updated successfully)
 if ((hypr_errors > 0)); then
     printf 'Warning: %d hyprctl command(s) failed. Is Hyprland running?\n' "$hypr_errors" >&2
+fi
+
+# Reload Mako dynamically
+if command -v makoctl &>/dev/null; then
+    makoctl reload &>/dev/null || printf 'Warning: makoctl reload failed.\n' >&2
 fi
 
 # --- User Feedback ---
