@@ -8,6 +8,17 @@ for arg in "$@"; do
     case "$arg" in
         --vertical) MODE="vertical" ;;
         --horizontal) MODE="horizontal" ;;
+        --clear)
+            # 1. Wipe the Rofi blacklist to prevent infinite file growth
+            rm -f "${XDG_RUNTIME_DIR:-/tmp}/mako_rofi_blacklist"
+            # 2. Hard restart Mako to completely flush active and history memory buffers
+            if systemctl --user is-active --quiet mako.service; then
+                systemctl --user restart mako.service
+            else
+                pkill -x mako && uwsm app -- mako &
+            fi
+            exit 0
+            ;;
     esac
 done
 
@@ -61,16 +72,16 @@ jq -c -n \
     | map(select($blacklist_dict[.id | tostring] | not))
     | length as $count
     
-    # 3. Native JSON structural generation based on parsed arguments
+# 3. Native JSON structural generation based on parsed arguments
     | if ($dnd != "") then
         {
-            "text": (if $mode == "vertical" then ($count | pad3) + "\n" + ($dnd_icon | pad3) else (if $count == 0 then $dnd_icon else "\($dnd_icon) \($count)" end) end),
+            "text": (if $mode == "vertical" then (if $count == 0 then ($dnd_icon | pad3) else ($count | pad3) + "\n" + ($dnd_icon | pad3) end) else (if $count == 0 then $dnd_icon else "\($dnd_icon) \($count)" end) end),
             "tooltip": "Do Not Disturb (\($count) pending)",
             "class": (if $count == 0 then "dnd" else "dnd-pending" end)
         }
       else
         {
-            "text": (if $mode == "vertical" then ($count | pad3) + "\n" + ($norm_icon | pad3) else (if $count == 0 then $norm_icon else "\($norm_icon) \($count)" end) end),
+            "text": (if $mode == "vertical" then (if $count == 0 then ($norm_icon | pad3) else ($count | pad3) + "\n" + ($norm_icon | pad3) end) else (if $count == 0 then $norm_icon else "\($norm_icon) \($count)" end) end),
             "tooltip": (if $count == 0 then "No notifications" else "\($count) pending notifications" end),
             "class": (if $count == 0 then "empty" else "pending" end)
         }
