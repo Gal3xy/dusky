@@ -32,6 +32,7 @@ readonly -a REPO_TARGETS=(
   fcitx5-gtk
   fcitx5-qt
   network-manager-applet
+  firewalld
 )
 
 # AUR Packages

@@ -20,6 +20,8 @@ declare -ar pkgs_misc=(
     "python-pyudev"
 
     "papirus-icon-theme"
+
+    "ufw"
 )
 
 
