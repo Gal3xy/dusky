@@ -19,7 +19,7 @@ readonly SERVICES=(
     "udisks2.service"
     "thermald.service"
     "bluetooth.service"
-    "firewalld.service"
+    "ufw.service"
     "fstrim.timer"
     "systemd-timesyncd.service"
     "acpid.service"
