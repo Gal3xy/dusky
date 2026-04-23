@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   WAYBAR PREMIUM THEME - Compact Edition (Refined)
+   WAYBAR PREMIUM THEME - Compact Edition (Refined & Mirrored from Translucent)
    ═══════════════════════════════════════════════════════════════════════════ */
 
 @import url("../../.config/matugen/generated/waybar-colors.css");
@@ -10,7 +10,6 @@
 
 * {
   border: none;
-  border-radius: 0;
   min-height: 0;
   font-family: "JetBrainsMono Nerd Font", "Symbols Nerd Font", sans-serif;
   font-weight: 600;
@@ -26,9 +25,9 @@ window#waybar {
    ───────────────────────────────────────────────────────────────────────────── */
 
 window#waybar > box {
-  background-color: alpha(@surface, 0.78);
+  background-color: alpha(@surface, 0.3);
   border-radius: 10px;
-  border: 1px solid alpha(@outline_variant, 0.15);
+  border: 1px solid alpha(@outline_variant, 0.14);
   margin: 2px 0;
 }
 
@@ -48,8 +47,28 @@ window#waybar > box {
 }
 
 #custom-launcher:hover {
-  background-image: linear-gradient(135deg, @primary_fixed_dim 0%, @primary 100%);
-  box-shadow: 0 4px 16px alpha(@primary, 0.4);
+  background-image: linear-gradient(135deg, @primary_fixed_dim 0%, @primary 30%);
+  box-shadow: 0 4px 16px alpha(@primary, 0.3);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   UPDATES DRAWER
+   ───────────────────────────────────────────────────────────────────────────── */
+
+#custom-updates, #custom-updates-trigger {
+  padding: 0px 8px;
+  margin: 1px 2px;
+  border-radius: 10px;
+  background-color: alpha(@surface_container, 0.35);
+  color: @secondary;
+  transition: all 0.2s ease-in-out;
+}
+
+#custom-updates:hover, #custom-updates-trigger:hover {
+  background-color: alpha(@surface_container_highest, 0.9);
+  border: 1px solid alpha(@primary, 0.3);
+  color: @primary;
+  text-shadow: 0 0 4px alpha(@primary, 0.5);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -60,63 +79,15 @@ window#waybar > box {
   padding: 0px 5px 0px 5px;
   margin: 1px 2px;
   border-radius: 10px;
-  background-color: alpha(@surface_container, 0.6);
+  background-color: alpha(@surface_container, 0.35);
   color: @on_surface;
   font-weight: 700;
   transition: all 0.2s ease-in-out;
 }
 
 #clock:hover {
-  padding: 0px 5px 0px 5px;
   background-color: alpha(@surface_container_highest, 0.9);
   border: 1px solid alpha(@primary, 0.3);
-}
-
-/* ─────────────────────────────────────────────────────────────────────────────
-   IDLE INHIBITOR
-   ───────────────────────────────────────────────────────────────────────────── */
-
-#custom-inhibit-suspend {
-  padding: 0px 12px 0px 9px;
-  margin: 1px 2px;
-  border-radius: 10px;
-  background-color: alpha(@surface_container, 0.6);
-  color: @on_surface;
-  font-size: 14px;
-  transition: all 0.2s ease-in-out;
-}
-
-#custom-inhibit-suspend:hover {
-  background-color: alpha(@surface_container_high, 0.9);
-}
-
-#custom-inhibit-suspend.disabled {
-  color: @tertiary;
-  padding: 0px 12px 0px 9px;
-  background-color: alpha(@tertiary_container, 0.3);
-  border: 1px solid alpha(@tertiary, 0.2);
-}
-
-#custom-inhibit-suspend.enabled {
-  color: @on_surface_variant;
-  background-color: alpha(@surface_container, 0.6);
-}
-
-/* ─────────────────────────────────────────────────────────────────────────────
-   UPDATES
-   ───────────────────────────────────────────────────────────────────────────── */
-
-#custom-updates {
-  padding: 0 8px;
-  margin: 1px 2px;
-  border-radius: 10px;
-  background-color: alpha(@surface_container, 0.6);
-  color: @secondary;
-  transition: all 0.2s ease-in-out;
-}
-
-#custom-updates:hover {
-  background-color: alpha(@surface_container_high, 0.9);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -127,7 +98,7 @@ window#waybar > box {
   padding: 0px 12px 0px 9px;
   margin: 1px 2px;
   border-radius: 10px;
-  background-color: alpha(@surface_container, 0.6);
+  background-color: alpha(@surface_container, 0.35);
   color: @on_surface;
   font-size: 14px;
   transition: all 0.2s ease-in-out;
@@ -145,7 +116,7 @@ window#waybar > box {
   padding: 0 8px;
   margin: 1px 2px;
   border-radius: 10px;
-  background-color: transparent;
+  background-color: alpha(@surface_container, 0);
   color: @secondary;
   font-size: 14px;
   transition: all 0.2s ease-in-out;
@@ -157,49 +128,6 @@ window#waybar > box {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   TRAY
-   ───────────────────────────────────────────────────────────────────────────── */
-
-#tray {
-  padding: 0 8px;
-  margin: 1px 2px;
-  border-radius: 10px;
-  background-color: alpha(@surface_container, 0.4);
-  transition: all 0.2s ease-in-out;
-}
-
-#tray:hover {
-  background-color: alpha(@surface_container_high, 0.9);
-}
-
-#tray > .passive {
-  -gtk-icon-effect: dim;
-}
-
-#tray > .needs-attention {
-  -gtk-icon-effect: highlight;
-  background-color: alpha(@error, 0.2);
-  border-radius: 6px;
-}
-
-#tray menu {
-  background-color: @surface_container_high;
-  border: 1px solid @outline_variant;
-  border-radius: 8px;
-  padding: 8px;
-}
-
-#tray menu menuitem {
-  padding: 6px 12px;
-  border-radius: 6px;
-  color: @on_surface;
-}
-
-#tray menu menuitem:hover {
-  background-color: @surface_container_highest;
-}
-
-/* ─────────────────────────────────────────────────────────────────────────────
    WORKSPACES
    ───────────────────────────────────────────────────────────────────────────── */
 
@@ -207,7 +135,7 @@ window#waybar > box {
   padding: 0px 0px 0px 0px;
   margin: 1px 6px;
   border-radius: 10px;
-  background-color: alpha(@surface_container, 0.5);
+  background-color: alpha(@surface_container, 0.2);
   border: 1px solid alpha(@outline_variant, 0.1);
 }
 
@@ -216,7 +144,7 @@ window#waybar > box {
   margin: 1px 2px;
   min-width: 12px;
   border-radius: 6px;
-  background-color: alpha(@surface_container_highest, 0.4);
+  background-color: alpha(@surface_container_highest, 0);
   color: @on_surface_variant;
   font-size: 12px;
   transition: all 0.2s ease-in-out;
@@ -225,7 +153,7 @@ window#waybar > box {
 #workspaces button.empty {
   padding: 0 6px;
   min-width: 20px;
-  background-color: alpha(@surface_container_high, 0.2);
+  background-color: alpha(@surface_container_high, 0);
   color: alpha(@on_surface_variant, 0.4);
 }
 
@@ -250,7 +178,7 @@ window#waybar > box {
 
 #workspaces button.active:hover {
   background-image: linear-gradient(135deg, @primary_fixed_dim 0%, @primary 100%);
-  box-shadow: 0 3px 12px alpha(@primary, 0.45);
+  box-shadow: 0 3px 12px alpha(@primary, 0.7);
 }
 
 #workspaces button.urgent {
@@ -266,14 +194,31 @@ window#waybar > box {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   MPRIS
+   MPRIS DRAWER
    ───────────────────────────────────────────────────────────────────────────── */
+
+#custom-mpris-trigger {
+  padding: 0 10px;
+  margin: 1px 2px;
+  border-radius: 10px;
+  background-color: alpha(@secondary_container, 0.3);
+  color: @secondary;
+  font-size: 14px;
+  transition: all 0.2s ease-in-out;
+}
+
+#custom-mpris-trigger:hover {
+  background-color: alpha(@secondary_container, 0.5);
+  border: 1px solid alpha(@secondary, 0.3);
+  color: @primary;
+  text-shadow: 0 0 4px alpha(@primary, 0.5);
+}
 
 #mpris {
   padding: 0 10px;
   margin: 1px 2px;
   border-radius: 10px;
-  background-color: alpha(@secondary_container, 0.4);
+  background-color: alpha(@secondary_container, 0.3);
   color: @on_secondary_container;
   font-size: 12px;
   border: 1px solid alpha(@secondary, 0.15);
@@ -281,17 +226,12 @@ window#waybar > box {
 }
 
 #mpris:hover {
-  background-color: alpha(@secondary_container, 0.7);
+  background-color: alpha(@secondary_container, 0.5);
   border: 1px solid alpha(@secondary, 0.3);
 }
 
-#mpris.playing {
-  color: @secondary;
-}
-
-#mpris.paused {
-  color: alpha(@on_secondary_container, 0.6);
-}
+#mpris.playing { color: @secondary; }
+#mpris.paused { color: alpha(@on_secondary_container, 0.6); }
 
 #mpris.stopped {
   padding: 0;
@@ -302,52 +242,38 @@ window#waybar > box {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   NETWORK & CUSTOM SPEED
+   NETWORK & DYNAMIC BANDWIDTH METER
    ───────────────────────────────────────────────────────────────────────────── */
 
 #custom-net-speed {
   padding: 0px 12px 0px 8px;
-  margin: 1px 8px;
+  margin: 1px 2px;
+  background-color: alpha(@surface_container, 0.2);
   border-radius: 10px;
-  background-color: alpha(@surface_container, 0.6);
-  color: @tertiary;
+  color: @on_surface;
   font-size: 10px;
   transition: all 0.2s ease-in-out;
-}
-
-#custom-net-speed:hover {
-  background-color: alpha(@surface_container_high, 0.9);
 }
 
 #network {
   padding: 1px 14px 0px 9px;
   margin: 1px 2px;
+  background-color: alpha(@surface_container, 0.2);
   border-radius: 10px;
-  background-color: alpha(@surface_container, 0.6);
   color: @on_surface;
   font-size: 14px;
   transition: all 0.2s ease-in-out;
 }
 
-#network:hover {
-  background-color: alpha(@surface_container_high, 0.9);
+#network:hover, #custom-net-speed:hover {
+  background-color: alpha(@surface_container_high, 0.45);
 }
 
-#network.disconnected {
-  padding: 1px 14px 0px 9px;
-  color: alpha(@on_surface_variant, 0.4);
-}
-
-#network.linked,
-#network.ethernet {
-  padding: 1px 13px 0px 9px;
-  color: @tertiary;
-}
-
-#network.wifi {
-  color: @primary_fixed;
-  padding: 1px 14px 0px 9px;
-}
+#custom-net-speed.network-kb { color: @secondary; font-weight: bold; }
+#custom-net-speed.network-mb { color: @primary; font-weight: 900; text-shadow: 0 0 5px alpha(@primary, 0.7); }
+#custom-net-speed.network-disconnected, #network.disconnected { color: @error; padding: 1px 14px 0px 9px; }
+#network.linked, #network.ethernet { color: @tertiary; padding: 1px 13px 0px 9px; }
+#network.wifi { color: @primary_fixed; padding: 1px 14px 0px 9px; }
 
 /* ─────────────────────────────────────────────────────────────────────────────
    BLUETOOTH
@@ -356,24 +282,16 @@ window#waybar > box {
 #bluetooth {
   padding: 0px 8px 0px 8px;
   margin: 1px 2px;
+  background-color: alpha(@surface_container, 0.2);
   border-radius: 10px;
-  background-color: alpha(@surface_container, 0.6);
   color: @on_surface;
   font-size: 12px;
   transition: all 0.2s ease-in-out;
 }
 
-#bluetooth:hover {
-  background-color: alpha(@surface_container_high, 0.9);
-}
-
-#bluetooth.disabled {
-  color: alpha(@on_surface_variant, 0.4);
-}
-
-#bluetooth.connected {
-  color: @primary_fixed;
-}
+#bluetooth:hover { background-color: alpha(@surface_container_high, 0.45); }
+#bluetooth.disabled { color: alpha(@on_surface_variant, 0.6); }
+#bluetooth.connected { color: @primary_fixed; }
 
 /* ─────────────────────────────────────────────────────────────────────────────
    PULSEAUDIO OUTPUT
@@ -382,20 +300,15 @@ window#waybar > box {
 #pulseaudio.output {
   padding: 0px 12px 0px 9px;
   margin: 1px 2px;
+  background-color: alpha(@surface_container, 0.2);
   border-radius: 10px;
-  background-color: alpha(@surface_container, 0.6);
   color: @on_surface;
   font-size: 12px;
   transition: all 0.2s ease-in-out;
 }
 
-#pulseaudio.output:hover {
-  background-color: alpha(@surface_container_high, 0.9);
-}
-
-#pulseaudio.output.muted {
-  color: alpha(@on_surface_variant, 0.4);
-}
+#pulseaudio.output:hover { background-color: alpha(@surface_container_high, 0.45); }
+#pulseaudio.output.muted { color: alpha(@on_surface_variant, 0.4); }
 
 /* ─────────────────────────────────────────────────────────────────────────────
    BACKLIGHT
@@ -405,15 +318,13 @@ window#waybar > box {
   padding: 0px 13px 0px 8px;
   margin: 1px 2px;
   border-radius: 10px;
-  background-color: alpha(@surface_container, 0.6);
+  background-color: alpha(@surface_container, 0.2);
   color: @tertiary;
   font-size: 12px;
   transition: all 0.2s ease-in-out;
 }
 
-#backlight:hover {
-  background-color: alpha(@surface_container_high, 0.9);
-}
+#backlight:hover { background-color: alpha(@surface_container_high, 0.45); }
 
 /* ─────────────────────────────────────────────────────────────────────────────
    CPU
@@ -422,22 +333,15 @@ window#waybar > box {
 #cpu {
   padding: 0 8px;
   margin: 1px 2px;
+  background-color: alpha(@surface_container, 0.2);
   border-radius: 10px;
-  background-color: alpha(@surface_container, 0.6);
   color: @on_surface_variant;
   font-size: 12px;
   transition: all 0.2s ease-in-out;
 }
 
-#cpu:hover {
-  background-color: alpha(@surface_container_high, 0.9);
-}
-
-#cpu.warning {
-  color: @tertiary;
-  background-color: alpha(@tertiary_container, 0.2);
-}
-
+#cpu:hover { background-color: alpha(@surface_container_high, 0.45); }
+#cpu.warning { color: @tertiary; background-color: alpha(@tertiary_container, 0.2); }
 #cpu.critical {
   color: @error;
   background-color: alpha(@error_container, 0.3);
@@ -451,22 +355,15 @@ window#waybar > box {
 #memory {
   padding: 0 8px;
   margin: 1px 2px;
+  background-color: alpha(@surface_container, 0.2);
   border-radius: 10px;
-  background-color: alpha(@surface_container, 0.6);
   color: @on_surface_variant;
   font-size: 11px;
   transition: all 0.2s ease-in-out;
 }
 
-#memory:hover {
-  background-color: alpha(@surface_container_high, 0.9);
-}
-
-#memory.warning {
-  color: @tertiary;
-  background-color: alpha(@tertiary_container, 0.2);
-}
-
+#memory:hover { background-color: alpha(@surface_container_high, 0.45); }
+#memory.warning { color: @tertiary; background-color: alpha(@tertiary_container, 0.2); }
 #memory.critical {
   color: @error;
   background-color: alpha(@error_container, 0.3);
@@ -480,35 +377,25 @@ window#waybar > box {
 #battery {
   padding: 0px 5px 0px 5px;
   margin: 1px 2px;
+  background-color: alpha(@surface_container, 0.35);
   border-radius: 10px;
-  background-color: alpha(@surface_container, 0.6);
   color: @on_surface;
   font-weight: 700;
   transition: all 0.2s ease-in-out;
 }
 
-#battery:hover {
-  background-color: alpha(@surface_container_high, 0.9);
-}
-
-#battery.good {
-  color: @tertiary;
-}
-
-#battery.charging,
-#battery.plugged,
-#battery.full {
+#battery:hover { background-color: alpha(@surface_container_high, 0.45); }
+#battery.good { color: @tertiary; }
+#battery.charging, #battery.plugged, #battery.full {
   color: @tertiary;
   background-color: alpha(@tertiary_container, 0.25);
   border: 1px solid alpha(@tertiary, 0.15);
 }
-
 #battery.warning:not(.charging) {
   color: @primary_fixed;
   background-color: alpha(@primary_container, 0.3);
   border: 1px solid alpha(@primary, 0.2);
 }
-
 #battery.critical:not(.charging) {
   color: @on_error;
   background-image: linear-gradient(135deg, @error_container 0%, @error 100%);
@@ -523,6 +410,34 @@ window#waybar > box {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   IDLE INHIBITOR (Inside Power Drawer)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+#custom-inhibit-suspend {
+  padding: 0px 12px 0px 9px;
+  margin: 1px 2px;
+  border-radius: 10px;
+  background-color: alpha(@surface_container, 0.35);
+  color: @on_surface;
+  font-size: 14px;
+  transition: all 0.2s ease-in-out;
+}
+
+#custom-inhibit-suspend:hover { background-color: alpha(@on_surface, 0.6); }
+
+#custom-inhibit-suspend.disabled {
+  color: @tertiary;
+  padding: 0px 12px 0px 9px;
+  background-color: alpha(@tertiary_container, 0.3);
+  border: 1px solid alpha(@tertiary, 0.2);
+}
+
+#custom-inhibit-suspend.enabled {
+  color: @on_surface_variant;
+  background-color: alpha(@surface_container, 0.35);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
    POWER BUTTON
    ───────────────────────────────────────────────────────────────────────────── */
 
@@ -533,12 +448,12 @@ window#waybar > box {
   background-image: linear-gradient(135deg, @primary_container 0%, @primary_fixed_dim 100%);
   color: @on_primary_container;
   font-size: 14px;
-  box-shadow: 0 2px 8px alpha(@error, 0.25);
+  box-shadow: 0 2px 8px alpha(@primary, 0.25);
   transition: all 0.2s ease-in-out;
 }
 
 #custom-power:hover {
-  background-color: @error;
+  background-color: @primary;
   background-image: none;
   box-shadow: 0 4px 16px alpha(@error, 0.4);
 }

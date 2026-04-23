@@ -15,13 +15,11 @@
   // --- MODULE LAYOUT ---
   "modules-left": [
     "custom/launcher",
+    "group/updates-drawer",
     "clock",
-    "custom/inhibit-suspend",
-    "custom/updates",
     "custom/notification",
     "custom/theme-toggle",
-    "custom/net-speed",
-    "tray"
+    "group/mpris-drawer"
   ],
 
   "modules-center": [
@@ -29,7 +27,7 @@
   ],
 
   "modules-right": [
-    "mpris",
+    "custom/net-speed",
     "network",
     "bluetooth",
     "pulseaudio#output",
@@ -37,19 +35,79 @@
     "cpu",
     "memory",
     "battery",
-    "custom/power"
+    "group/power-drawer"
   ],
+
+  // --- DRAWERS & GROUPS ---
+
+  "group/updates-drawer": {
+    "orientation": "horizontal",
+    "drawer": {
+      "transition-duration": 400,
+      "children-class": "updates-drawer",
+      "click-to-reveal": false,
+      "transition-left-to-right": true
+    },
+    "modules": [
+      "custom/updates-trigger",
+      "custom/updates"
+    ]
+  },
+
+  "group/mpris-drawer": {
+    "orientation": "horizontal",
+    "drawer": {
+      "transition-duration": 600,
+      "children-class": "mpris-drawer",
+      "click-to-reveal": false,
+      "transition-left-to-right": true
+    },
+    "modules": [
+      "custom/mpris-trigger",
+      "mpris"
+    ]
+  },
+
+  "group/power-drawer": {
+    "orientation": "horizontal",
+    "drawer": {
+      "transition-duration": 400,
+      "children-class": "power-drawer",
+      "click-to-reveal": false,
+      "transition-left-to-right": false
+    },
+    "modules": [
+      "custom/power",
+      "custom/inhibit-suspend"
+    ]
+  },
 
   // --- MODULE CONFIGURATION ---
 
   "custom/launcher": {
     "format": "󰣇",
-    "on-click": "python3 ~/user_scripts/dusky_system/control_center/dusky_control_center.py",
+    "on-click": "uwsm-app -- python3 ~/user_scripts/dusky_system/control_center/dusky_control_center.py",
     "tooltip-format": "Control Center"
   },
 
+  "custom/updates-trigger": {
+    "format": "",
+    "exec": "echo ''",
+    "exec-if": "grep -q '\"class\":\"pending\"' ~/.config/dusky/settings/waybar_update_counter_h 2>/dev/null",
+    "interval": 5,
+    "tooltip": false
+  },
+
+  "custom/updates": {
+    "exec": "tail -F ~/.config/dusky/settings/waybar_update_counter_h 2>/dev/null",
+    "return-type": "json",
+    "format": "󰏔 {}",
+    "tooltip": true,
+    "on-click": "uwsm-app -- kitty sh -c 'command -v yay >/dev/null && yay || paru'"
+  },
+
   "clock": {
-    "format": "{:%I:%M %p}",
+    "format": "{:%I:%M}",
     "format-alt": "󰃭 {:%A, %B %d}",
     "tooltip-format": "<tt><span size='12pt' font='JetBrainsMono Nerd Font'>{calendar}</span></tt>",
     "on-click-right": "uwsm-app -- gnome-clocks",
@@ -64,27 +122,9 @@
         "days": "<span color='#e2e2e2'>{}</span>",
         "weeks": "<span color='#c9ca93'>W{}</span>",
         "weekdays": "<span color='#ffb786'><b>{}</b></span>",
-        "today": "<span color='#131313' background='#ffb786'><b> {} </b></span>"
+        "today": "<span color='#131313' background='#ffb786'><b>{}</b></span>"
       }
     }
-  },
-
-  "custom/inhibit-suspend": {
-    "format": "{}",
-    "exec": "if pgrep -x 'hypridle' > /dev/null; then echo '{\"text\": \"󰾪\", \"tooltip\": \"Idle enabled. Click to disable.\", \"class\": \"enabled\"}'; else echo '{\"text\": \"󰅶\", \"tooltip\": \"Idle disabled. Click to enable.\", \"class\": \"disabled\"}'; fi",
-    "return-type": "json",
-    "interval": 5,
-    "signal": 9,
-    "on-click": "uwsm-app -- ~/user_scripts/waybar/toggle_hypridle.sh",
-    "escape": true
-  },
-
-  "custom/updates": {
-    "format": "󰏔 {}",
-    "exec": "checkupdates 2>/dev/null | wc -l || echo 0",
-    "interval": 3600,
-    "on-click": "kitty sh -c 'command -v yay >/dev/null && yay || paru'",
-    "tooltip-format": "System Updates"
   },
 
   "custom/notification": {
@@ -106,7 +146,7 @@
     "on-click-right": "makoctl mode -t do-not-disturb && pkill -RTMIN+8 waybar",
     "signal": 8,
     "escape": true,
-    "tooltip-format": "Notifications\n\n LMB Toggle Panel\n RMB  Do Not Disturb"
+    "tooltip-format": "Notifications\n\n LMB  Toggle Panel\n RMB  Do Not Disturb"
   },
 
   "custom/theme-toggle": {
@@ -115,12 +155,6 @@
     "on-click": "uwsm-app -- ~/user_scripts/theme_matugen/theme_ctl.sh set --mode dark",
     "on-click-right": "uwsm-app -- ~/user_scripts/theme_matugen/theme_ctl.sh set --mode light",
     "on-click-middle": "uwsm-app -- waypaper"
-  },
-
-  "tray": {
-    "icon-size": 15,
-    "spacing": 6,
-    "show-passive-items": true
   },
 
   "hyprland/workspaces": {
@@ -145,6 +179,14 @@
     "on-scroll-down": "hyprctl dispatch workspace e+1"
   },
 
+  "custom/mpris-trigger": {
+    "format": "♪",
+    "exec": "echo '♪'",
+    "exec-if": "playerctl status 2>/dev/null | grep -qE 'Playing|Paused'",
+    "interval": 1,
+    "tooltip": false
+  },
+
   "mpris": {
     "format": "{player_icon} {title}",
     "format-paused": "{status_icon} <i>{title}</i>",
@@ -165,7 +207,6 @@
     "on-scroll-down": "playerctl previous"
   },
 
-  // --- CUSTOM NET SPEED ---
   "custom/net-speed": {
     "exec": "$HOME/user_scripts/waybar/network/network_meter_calling.sh --horizontal",
     "return-type": "json",
@@ -182,7 +223,7 @@
     "tooltip-format-wifi": "󰤨 {essid}\n󱑽 {signalStrength}%\n󰩟 {ipaddr}",
     "tooltip-format-ethernet": "󰈀 Ethernet\n󰩟 {ipaddr}",
     "tooltip-format-disconnected": "󰤭 Disconnected",
-    "on-click": "nm-connection-editor"
+    "on-click": "uwsm-app -- kitty --class wifitui -e wifitui"
   },
 
   "bluetooth": {
@@ -236,20 +277,22 @@
   "cpu": {
     "interval": 2,
     "format": "󰍛 {usage}%",
-    "on-click": "kitty -e btop",
+    "on-click": "uwsm-app -- kitty -e btop",
     "states": {
       "warning": 70,
       "critical": 90
     }
   },
-
+  
   "memory": {
-    "interval": 2,
-    "format": "󰘚 {percentage}%",
-    "on-click": "uwsm-app -- kitty --class io_monitor.sh -e $HOME/user_scripts/drives/io_monitor.sh",
+    "format": "󰍛 {percentage}%",
+    "format-alt": "󰍛 {used:0.1f}G",
+    "interval": 3,
+    "on-click-right": "uwsm-app -- kitty --class io_monitor.sh -e $HOME/user_scripts/drives/io_monitor.sh",
+    "tooltip-format": "RAM: {used:0.2f} GiB / {total:0.2f} GiB ({percentage}%)\nAvailable: {avail:0.2f} GiB\nSwap: {swapUsed:0.2f} GiB / {swapTotal:0.2f} GiB\n\nRMB: I/O Monitor",
     "states": {
       "warning": 70,
-      "critical": 90
+      "critical": 85
     }
   },
 
@@ -269,15 +312,19 @@
     "format-icons": ["󰂎", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"]
   },
 
+  "custom/inhibit-suspend": {
+    "format": "{}",
+    "exec": "if pgrep -x 'hypridle' > /dev/null; then echo '{\"text\": \"󰾪\", \"tooltip\": \"Idle enabled. Click to disable.\", \"class\": \"enabled\"}'; else echo '{\"text\": \"󰅶\", \"tooltip\": \"Idle disabled. Click to enable.\", \"class\": \"disabled\"}'; fi",
+    "return-type": "json",
+    "interval": 5,
+    "signal": 9,
+    "on-click": "uwsm-app -- ~/user_scripts/waybar/toggle_hypridle.sh",
+    "escape": true
+  },
+
   "custom/power": {
     "format": "⏻",
     "on-click": "uwsm-app -- ~/user_scripts/wlogout/wlogout_scale.sh",
     "tooltip-format": "Power Menu"
-  },
-
-  "custom/lyrics": {
-    "exec": "lrcsnc",
-    "escape": true,
-    "min-length": 1
   }
 }
