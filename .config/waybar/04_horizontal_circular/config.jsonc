@@ -1,16 +1,16 @@
-//horizontal_circular
 {
-	"reload_style_on_change": true,
+    "reload_style_on_change": true,
     "layer": "top",
     "position": "top",
     "margin-top": 3,
     "margin-left": 10,
     "margin-right": 10,
     "spacing": 0,
+
     "modules-left": [
         "group/power",
         "hyprland/workspaces",
-        "group/temps"
+        "group/updates-drawer"
     ],
     "modules-center": [
         "backlight",
@@ -34,6 +34,7 @@
         "modules": [
             "custom/arch",
             "custom/lock",
+            "custom/inhibit-suspend",
             "custom/logout",
             "custom/reboot",
             "custom/shutdown"
@@ -42,12 +43,21 @@
     "custom/arch": {
         "format": "󰣇",
         "tooltip-format": "Control Center",
-        "on-click": "python3 ~/user_scripts/dusky_system/control_center/dusky_control_center.py"
+        "on-click": "uwsm-app -- python3 ~/user_scripts/dusky_system/control_center/dusky_control_center.py"
     },
     "custom/lock": {
         "format": "󰌾",
         "tooltip-format": "Lock Screen",
-        "on-click": "$HOME/user_scripts/hyprlock/lock.sh"
+        "on-click": "uwsm-app -- $HOME/user_scripts/hyprlock/lock.sh"
+    },
+    "custom/inhibit-suspend": {
+        "format": "{}",
+        "exec": "if pgrep -x 'hypridle' > /dev/null; then echo '{\"text\": \"󰾪\", \"tooltip\": \"Idle enabled. Click to disable.\", \"class\": \"enabled\"}'; else echo '{\"text\": \"󰅶\", \"tooltip\": \"Idle disabled. Click to enable.\", \"class\": \"disabled\"}'; fi",
+        "return-type": "json",
+        "interval": 5,
+        "signal": 9,
+        "on-click": "uwsm-app -- ~/user_scripts/waybar/toggle_hypridle.sh",
+        "escape": true
     },
     "custom/logout": {
         "format": "󰍃",
@@ -65,35 +75,32 @@
         "on-click": "systemctl poweroff"
     },
 
-    // === GROUP: TEMPS (The Sensors) ===
-    "group/temps": {
+    // === GROUP: UPDATES (Dynamic Drawer) ===
+    "group/updates-drawer": {
         "orientation": "horizontal",
         "drawer": {
-            "transition-duration": 500,
-            "children-class": "temp-drawer",
+            "transition-duration": 400,
+            "children-class": "updates-drawer",
             "transition-left-to-right": true
         },
         "modules": [
-            "temperature#cpu",
-            "custom/gpu",
-            "temperature#system"
+            "custom/updates-trigger",
+            "custom/updates"
         ]
     },
-    "temperature#cpu": {
-        "hwmon-path": "/sys/class/thermal/thermal_zone6/type:x86_pkg_temp",
-        "format": " {temperatureC}°C",
-        "tooltip-format": "CPU: {temperatureC}°C"
-    },
-    "custom/gpu": {
-        "exec": "nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>/dev/null || echo 'N/A'",
-        "format": " {}°C",
+    "custom/updates-trigger": {
+        "format": "",
+        "exec": "echo ''",
+        "exec-if": "grep -q '\"class\":\"pending\"' ~/.config/dusky/settings/waybar_update_counter_h 2>/dev/null",
         "interval": 5,
-        "tooltip-format": "GPU: {}°C"
+        "tooltip": false
     },
-    "temperature#system": {
-        "hwmon-path": "/sys/class/hwmon/hwmon1/temp1_input",
-        "format": " {temperatureC}°C",
-        "tooltip-format": "System: {temperatureC}°C"
+    "custom/updates": {
+        "exec": "tail -F ~/.config/dusky/settings/waybar_update_counter_h 2>/dev/null",
+        "return-type": "json",
+        "format": "󰏔 {}",
+        "tooltip": true,
+        "on-click": "uwsm-app -- kitty sh -c 'command -v yay >/dev/null && yay || paru'"
     },
 
     // === MODULES: LEFT ===
@@ -118,16 +125,38 @@
     },
     "clock": {
         "format": "{:%I:%M %p}",
-        "tooltip-format": "{:%A, %B %d, %Y}",
-        "on-click": "gnome-clocks",
-        "on-click-middle": "kitty --class clock -e peaclock"
+        "format-alt": "󰃭 {:%A, %B %d}",
+        "tooltip-format": "<tt><span size='12pt' font='JetBrainsMono Nerd Font'>{calendar}</span></tt>",
+        "on-click": "uwsm-app -- gnome-clocks",
+        "on-click-middle": "uwsm-app -- kitty --class clock -e peaclock",
+        "calendar": {
+            "mode": "month",
+            "mode-mon-col": 3,
+            "weeks-pos": "right",
+            "on-scroll": 1,
+            "format": {
+                "months": "<span color='#ffb77a'><b>{}</b></span>",
+                "days": "<span color='#efe0d6'>{}</span>",
+                "weeks": "<span color='#c3cb97'>W{}</span>",
+                "weekdays": "<span color='#ffb77a'><b>{}</b></span>",
+                "today": "<span color='#19120c' background='#ffb77a'><b>{}</b></span>"
+            }
+        },
+        "actions": {
+            "on-click-right": "mode",
+            "on-scroll-up": "shift_up",
+            "on-scroll-down": "shift_down"
+        }
     },
     "pulseaudio": {
         "format": "{icon} {volume}%",
         "format-muted": "󰝟",
         "format-icons": { "default": ["󰕿", "󰖀", "󰕾"] },
-        "on-click": "pavucontrol",
-        "on-click-right": "kitty --class cava -e cava"
+        "on-click": "uwsm-app -- pavucontrol",
+        "on-click-right": "uwsm-app -- kitty --class cava -e cava",
+        "on-click-middle": "pactl set-sink-mute @DEFAULT_SINK@ toggle",
+        "on-scroll-up": "pactl set-sink-volume @DEFAULT_SINK@ +5%",
+        "on-scroll-down": "pactl set-sink-volume @DEFAULT_SINK@ -5%"
     },
 
     // === MODULES: RIGHT ===
@@ -145,9 +174,8 @@
         "format-plugged": "󰚥 {capacity}%",
         "format-icons": ["󰂎", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"],
         "on-click": "uwsm-app -- kitty --class power_saver.sh --hold -e $HOME/user_scripts/battery/power_saving/power_saver.sh",
-        "on-click-right": "uwsm-app -- kitty --class dusky_hypridle.sh -e $HOME/user_scripts/hypridle/dusky_hypridle.sh"
-
-
+        "on-click-right": "uwsm-app -- kitty --class dusky_hypridle.sh -e $HOME/user_scripts/hypridle/dusky_hypridle.sh",
+        "tooltip-format": "{timeTo}\n\n󱟦 Health: {health}%\n󱐋 Power: {power:.2f}W"
     },
     "custom/notification": {
         "format": "{}",
@@ -155,8 +183,10 @@
         "exec-if": "which makoctl",
         "exec": "~/user_scripts/waybar/mako.sh",
         "on-click": "~/user_scripts/rofi/rofi_mako.sh",
+        "on-click-middle": "~/user_scripts/waybar/mako.sh --clear && pkill -RTMIN+8 waybar",
         "on-click-right": "makoctl mode -t do-not-disturb && pkill -RTMIN+8 waybar",
         "signal": 8,
-        "escape": true
+        "escape": true,
+        "tooltip-format": "Notifications\n\n LMB  Toggle Panel\n MMB  Clear All\n RMB  Do Not Disturb"
     }
 }

@@ -122,7 +122,6 @@ tooltip label {
         0 0 6px alpha(@error, 0.5);
 }
 
-/* Liquid pulse animation for urgent workspaces */
 @keyframes liquid-pulse {
     0% {
         min-width: 16px;
@@ -147,12 +146,12 @@ tooltip label {
 #custom-notification,
 #custom-arch,
 #custom-lock,
+#custom-inhibit-suspend,
 #custom-logout,
 #custom-reboot,
 #custom-shutdown,
-#temperature.cpu,
-#temperature.system,
-#custom-gpu,
+#custom-updates-trigger,
+#custom-updates,
 #custom-net-speed,
 #backlight {
     background-color: @surface_container;
@@ -188,6 +187,7 @@ tooltip label {
 
 /* CIRCULAR POWER BUTTONS */
 #custom-lock,
+#custom-inhibit-suspend,
 #custom-logout,
 #custom-reboot,
 #custom-shutdown {
@@ -209,6 +209,15 @@ tooltip label {
     border-color: @secondary;
     box-shadow: 0 0 10px alpha(@secondary, 0.4);
 }
+
+#custom-inhibit-suspend:hover {
+    background-color: @tertiary; 
+    color: @on_tertiary; 
+    border-color: @tertiary;
+    box-shadow: 0 0 10px alpha(@tertiary, 0.4);
+}
+#custom-inhibit-suspend.enabled { color: @primary; border-color: @primary; }
+#custom-inhibit-suspend.disabled { color: @error; border-color: @error; }
 
 #custom-logout:hover { 
     background-color: @tertiary; 
@@ -232,51 +241,23 @@ tooltip label {
 }
 
 /* ============================================================ */
-/* TEMPS GROUP                                                 */
+/* UPDATES GROUP                                               */
 /* ============================================================ */
-#group-temps {
+#group-updates-drawer {
     background-color: transparent;
     margin: 0 6px 0 0;
     padding: 0;
 }
 
-#temperature.cpu { 
-    color: @primary; 
-    padding: 0px 12px 0px 7px;
-}
-#custom-gpu { 
-    color: @secondary; 
-    padding: 0px 12px 0px 7px;
-}
-#temperature.system {
-    color: @tertiary; 
-    padding: 0px 12px 0px 7px;
+#custom-updates-trigger, #custom-updates {
+    color: @tertiary;
 }
 
-#temperature.cpu:hover {
-    background-color: @primary;
-    color: @on_primary;
-    border-color: @primary;
-    box-shadow: 0 0 10px alpha(@primary, 0.3);
-}
-#custom-gpu:hover {
-    background-color: @secondary;
-    color: @on_secondary;
-    border-color: @secondary;
-    box-shadow: 0 0 10px alpha(@secondary, 0.3);
-}
-#temperature.system:hover {
+#custom-updates-trigger:hover, #custom-updates:hover {
     background-color: @tertiary;
     color: @on_tertiary;
     border-color: @tertiary;
     box-shadow: 0 0 10px alpha(@tertiary, 0.3);
-}
-
-#temperature.critical {
-    background-color: @error;
-    color: @on_error;
-    border-color: @error;
-    box-shadow: 0 0 12px alpha(@error, 0.5);
 }
 
 /* ============================================================ */
@@ -333,6 +314,25 @@ tooltip label {
     font-size: 12px;
     padding: 0px 10px;
     min-width: 90px;
+    transition: color 0.1s ease-in-out, text-shadow 0.1s ease-in-out, background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#custom-net-speed.network-kb {
+    color: @secondary;
+    border-color: @secondary-mild;
+}
+
+#custom-net-speed.network-mb {
+    color: @primary;
+    font-weight: 900;
+    text-shadow: 0 0 5px alpha(@primary, 0.8);
+    border-color: @primary;
+    box-shadow: 0 0 10px alpha(@primary, 0.4);
+}
+
+#custom-net-speed.network-disconnected {
+    color: @error;
+    border-color: @error-mild;
 }
 
 #custom-net-speed:hover {
@@ -340,6 +340,7 @@ tooltip label {
     color: @on_primary;
     border-color: @primary;
     box-shadow: 0 0 10px alpha(@primary, 0.4);
+    text-shadow: none; 
 }
 
 /* ============================================================ */
