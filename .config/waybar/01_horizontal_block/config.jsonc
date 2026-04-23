@@ -146,27 +146,21 @@
     "on-click": "uwsm-app -- kitty sh -c 'command -v yay >/dev/null && yay || paru'"
   },
 
-  "custom/notification": {
-    "format": "{icon}",
-    "format-icons": {
-      "notification": "󱅫",
-      "none": "󰂚",
-      "dnd-notification": "󱏧",
-      "dnd-none": "󰂛",
-      "inhibited-notification": "󱅫",
-      "inhibited-none": "󰂚",
-      "dnd-inhibited-notification": "󱏧",
-      "dnd-inhibited-none": "󰂛"
+"custom/notification": {
+        "justify": "center",
+        "align": 0.5,
+        "tooltip-format": "Left Click: Launch Mako\nMiddle Click: Clear All\nRight Click: Do Not Disturb",
+        "format": "{}",
+        "return-type": "json",
+        "exec-if": "which makoctl",
+        "exec": "~/user_scripts/waybar/mako.sh --horizontal",
+        "interval": 2,
+        "on-click": "~/user_scripts/rofi/rofi_mako.sh",
+        "on-click-middle": "~/user_scripts/waybar/mako.sh --clear && pkill -RTMIN+8 waybar",
+        "on-click-right": "makoctl mode -t do-not-disturb && pkill -RTMIN+8 waybar",
+        "signal": 8,
+        "escape": true
     },
-    "return-type": "json",
-    "exec-if": "which makoctl",
-    "exec": "~/user_scripts/waybar/mako.sh",
-    "on-click": "~/user_scripts/rofi/rofi_mako.sh",
-    "on-click-right": "makoctl mode -t do-not-disturb && pkill -RTMIN+8 waybar",
-    "signal": 8,
-    "escape": true,
-    "tooltip-format": "Notifications\n\n LMB  Toggle Panel\n RMB  Do Not Disturb"
-  },
 
   "custom/theme-toggle": {
     "format": "",

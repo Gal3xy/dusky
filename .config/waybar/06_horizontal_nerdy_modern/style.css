@@ -87,7 +87,11 @@ tooltip label {
 #tray,
 #custom-power,
 #custom-separator,
-#custom-separator-2 {
+#custom-separator-2,
+#custom-updates,
+#custom-updates-trigger,
+#mpris,
+#custom-mpris-trigger {
     padding: 0 10px;
     margin: 2px 2px;
     border-radius: 8px;
@@ -110,7 +114,11 @@ tooltip label {
 #custom-theme:hover,
 #custom-inhibit-suspend:hover,
 #custom-notification:hover,
-#custom-power:hover {
+#custom-power:hover,
+#custom-updates:hover,
+#custom-updates-trigger:hover,
+#mpris:hover,
+#custom-mpris-trigger:hover {
     background-color: @surface_container_highest;
 }
 
@@ -215,6 +223,25 @@ tooltip label {
     font-family: "JetBrainsMono Nerd Font Mono", monospace;
     font-size: 11px;
     padding: 0px 8px 0px 7px;
+    transition: color 0.1s ease-in-out, text-shadow 0.1s ease-in-out;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DYNAMIC NETWORK CLASSES 
+   ═══════════════════════════════════════════════════════════════════════════ */
+#custom-net-speed.network-kb {
+    color: @secondary;
+    font-weight: bold;
+}
+
+#custom-net-speed.network-mb {
+    color: @primary;
+    font-weight: 900;
+    text-shadow: 0 0 5px alpha(@primary, 0.7);
+}
+
+#custom-net-speed.network-disconnected {
+    color: @error;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -244,15 +271,25 @@ tooltip label {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   MPRIS & UPDATES
+   ═══════════════════════════════════════════════════════════════════════════ */
+#custom-updates-trigger, 
+#custom-updates, 
+#custom-mpris-trigger { 
+    color: @secondary; 
+}
+
+#mpris.playing { color: @secondary; }
+#mpris.paused { color: alpha(@on_surface_variant, 0.6); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
    HARDWARE STATS MODULES
    ═══════════════════════════════════════════════════════════════════════════ */
-
-/* REDUCED PADDING FOR THINNER LOOK */
 #cpu,
 #memory,
 #disk,
 #temperature {
-    padding: 0px 4px 0px 5px; /* Reduced from 8px */
+    padding: 0px 4px 0px 5px; 
     font-size: 11px;
     border-radius: 10px
 }
@@ -307,7 +344,6 @@ tooltip label {
 /* ═══════════════════════════════════════════════════════════════════════════
    CONNECTIVITY MODULES
    ═══════════════════════════════════════════════════════════════════════════ */
-
 #backlight {
     color: @tertiary;
     font-size: 11px;
@@ -421,7 +457,6 @@ tooltip label {
 /* ═══════════════════════════════════════════════════════════════════════════
    SYSTEM MODULES
    ═══════════════════════════════════════════════════════════════════════════ */
-
 #custom-theme {
     color: @secondary;
     font-size: 14px;
@@ -467,7 +502,7 @@ tooltip label {
    SYSTEM TRAY
    ═══════════════════════════════════════════════════════════════════════════ */
 #tray {
-    padding: 0px 4px 0px 3px; /* Reduced from 8px to reduce wasted space */
+    padding: 0px 4px 0px 3px;
     margin: 0px 4px 0px 3px;
 }
 

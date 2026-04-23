@@ -22,29 +22,100 @@
     ],
     
     "modules-center": [
-        "custom/net-speed",
+        "group/network-drawer",
         "clock",
-        "privacy"
+        "privacy",
+        "group/mpris-drawer",
+        "group/updates-drawer"
     ],
     
     "modules-right": [
         "cpu", 
         "memory", 
-     //   "disk", 
         "temperature",
         "custom/separator",
-        "backlight", 
-        "network", 
+        "group/backlight-drawer", 
         "bluetooth", 
         "pulseaudio", 
         "battery",
         "custom/separator-2",
-        "custom/theme", 
-        "custom/inhibit-suspend", 
         "custom/notification",
         "tray",
-        "custom/power"
+        "group/power-drawer"
     ],
+
+    // ===================================================================
+    // DRAWERS & GROUPS
+    // ===================================================================
+    "group/network-drawer": {
+        "orientation": "horizontal",
+        "drawer": {
+            "transition-duration": 400,
+            "children-class": "network-drawer",
+            "click-to-reveal": false,
+            "transition-left-to-right": true
+        },
+        "modules": [
+            "custom/net-speed",
+            "network"
+        ]
+    },
+
+    "group/backlight-drawer": {
+        "orientation": "horizontal",
+        "drawer": {
+            "transition-duration": 400,
+            "children-class": "backlight-drawer",
+            "click-to-reveal": false,
+            "transition-left-to-right": true
+        },
+        "modules": [
+            "backlight",
+            "custom/theme"
+        ]
+    },
+
+    "group/power-drawer": {
+        "orientation": "horizontal",
+        "drawer": {
+            "transition-duration": 400,
+            "children-class": "power-drawer",
+            "click-to-reveal": false,
+            "transition-left-to-right": false
+        },
+        "modules": [
+            "custom/power",
+            "custom/inhibit-suspend"
+        ]
+    },
+
+    "group/updates-drawer": {
+        "orientation": "horizontal",
+        "drawer": {
+            "transition-duration": 400,
+            "children-class": "updates-drawer",
+            "click-to-reveal": false,
+            "transition-left-to-right": false
+        },
+        "modules": [
+            "custom/updates-trigger",
+            "custom/updates"
+        ]
+    },
+
+    "group/mpris-drawer": {
+        "orientation": "horizontal",
+        "drawer": {
+            "transition-duration": 600,
+            "children-class": "mpris-drawer",
+            "click-to-reveal": false,
+            "transition-left-to-right": true
+        },
+        "modules": [
+            "custom/mpris-trigger",
+            "mpris"
+        ]
+    },
 
     // ===================================================================
     // SEPARATORS
@@ -102,33 +173,16 @@
     },
 
     "hyprland/window": {
-        "format": "{title}",
-        "max-length": 40,
+        "format": "",
         "separate-outputs": true,
         "icon": true,
-        "icon-size": 16,
-        "rewrite": {
-            "(.*) — Mozilla Firefox": "󰈹",
-            "(.*) - Visual Studio Code": "󰨞",
-            "(.*) - Discord": "󰙯",
-            "(.*) - Obsidian(.*)": "󱓧",
-            "(.*) - Spotify": "󰓇",
-            "(.*) - Chromium": "",
-            "(.*) - Google Chrome": "",
-            "(.*) - Brave": "󰖟",
-            "(.*)Steam": "󰓓",
-            "kitty": "",
-            "Alacritty": "",
-            "foot": "",
-            "": "󰇄"
-        }
+        "icon-size": 16
     },
 
     // ===================================================================
-    // NETWORK METER (CUSTOM)
+    // CENTER MODULES
     // ===================================================================
     "custom/net-speed": {
-        // Updated path as requested
         "exec": "$HOME/user_scripts/waybar/network/network_meter_calling.sh --horizontal",
         "return-type": "json",
         "format": "{}",
@@ -136,14 +190,10 @@
         "tooltip": true
     },
 
-    // ===================================================================
-    // CENTER MODULES
-    // ===================================================================
     "clock": {
         "format": "{:%I:%M %p}",
         "format-alt": " {:%A, %d %B %Y  •  %I:%M:%S %p}",
         "tooltip-format": "<big>{:%A, %d %B %Y}</big>\n<tt><small>{calendar}</small></tt>",
-    //    "timezone": "Asia/Kolkata",
         "interval": 1,
         "calendar": {
             "mode": "year",
@@ -178,6 +228,50 @@
         ]
     },
 
+    "custom/mpris-trigger": {
+        "format": "♪",
+        "exec": "echo '♪'",
+        "exec-if": "playerctl status 2>/dev/null | grep -qE 'Playing|Paused'",
+        "interval": 1,
+        "tooltip": false
+    },
+
+    "mpris": {
+        "format": "{player_icon} {title}",
+        "format-paused": "{status_icon} <i>{title}</i>",
+        "format-stopped": "",
+        "max-length": 35,
+        "player-icons": {
+            "default": "󰎆",
+            "mpv": "󰎇",
+            "spotify": "󰓇",
+            "firefox": "󰈹"
+        },
+        "status-icons": {
+            "paused": "󰏤"
+        },
+        "tooltip-format": "{player} - {artist}\n{title}\n{album}",
+        "on-click": "playerctl play-pause",
+        "on-scroll-up": "playerctl next",
+        "on-scroll-down": "playerctl previous"
+    },
+
+    "custom/updates-trigger": {
+        "format": "",
+        "exec": "echo ''",
+        "exec-if": "grep -q '\"class\":\"pending\"' ~/.config/dusky/settings/waybar_update_counter_h 2>/dev/null",
+        "interval": 5,
+        "tooltip": false
+    },
+
+    "custom/updates": {
+        "exec": "tail -F ~/.config/dusky/settings/waybar_update_counter_h 2>/dev/null",
+        "return-type": "json",
+        "format": "󰏔 {}",
+        "tooltip": true,
+        "on-click": "uwsm-app -- kitty sh -c 'command -v yay >/dev/null && yay || paru'"
+    },
+
     // ===================================================================
     // RIGHT MODULES - Hardware Stats
     // ===================================================================
@@ -205,19 +299,6 @@
         }
     },
 
-    "disk": {
-        "format": "󰋊 {percentage_used}%",
-        "format-alt": "󰋊 {used}/{total}",
-        "path": "/",
-        "interval": 60,
-        "tooltip-format": "Disk Usage: {used}/{total} ({percentage_used}%)\nFree: {free}\nPath: {path}\n\nLMB: Toggle Format\nRMB: File Manager",
-        "states": {
-            "warning": 75,
-            "critical": 90
-        },
-        "on-click-right": "uwsm-app -- thunar"
-    },
-
     "temperature": {
         "thermal-zone": 6,
         "format": "{icon} {temperatureC}°",
@@ -229,7 +310,7 @@
     },
 
     // ===================================================================
-    // RIGHT MODULES - Connectivity
+    // RIGHT MODULES - Connectivity & System Controls
     // ===================================================================
     "backlight": {
         "device": "intel_backlight",
@@ -242,6 +323,14 @@
         "on-scroll-up": "brightnessctl set +5%",
         "on-scroll-down": "brightnessctl set 5%-",
         "interval": 60
+    },
+
+    "custom/theme": {
+        "format": "",
+        "tooltip-format": "Theme Switcher\n\nSwitch wallpapers with waypaper\nor Super + ' after toggling\nfor theme uniformity.\n\nLMB: Dark Mode\nRMB: Light Mode\nMMB: Waypaper",
+        "on-click": "uwsm-app -- ~/user_scripts/theme_matugen/theme_ctl.sh set --mode dark",
+        "on-click-right": "uwsm-app -- ~/user_scripts/theme_matugen/theme_ctl.sh set --mode light",
+        "on-click-middle": "uwsm-app -- waypaper"
     },
 
     "network": {
@@ -320,15 +409,33 @@
         "on-click-right": "uwsm-app -- kitty --class dusky_hypridle.sh -e $HOME/user_scripts/hypridle/dusky_hypridle.sh"
     },
 
-    // ===================================================================
-    // SYSTEM CONTROLS
-    // ===================================================================
-    "custom/theme": {
-        "format": "",
-        "tooltip-format": "Theme Switcher\n\nSwitch wallpapers with waypaper\nor Super + ' after toggling\nfor theme uniformity.\n\nLMB: Dark Mode\nRMB: Light Mode\nMMB: Waypaper",
-        "on-click": "uwsm-app -- ~/user_scripts/theme_matugen/theme_ctl.sh set --mode dark",
-        "on-click-right": "uwsm-app -- ~/user_scripts/theme_matugen/theme_ctl.sh set --mode light",
-        "on-click-middle": "uwsm-app -- waypaper"
+"custom/notification": {
+        "justify": "center",
+        "align": 0.5,
+        "tooltip-format": "Left Click: Launch Mako\nMiddle Click: Clear All\nRight Click: Do Not Disturb",
+        "format": "{}",
+        "return-type": "json",
+        "exec-if": "which makoctl",
+        "exec": "~/user_scripts/waybar/mako.sh --horizontal",
+        "interval": 2,
+        "on-click": "~/user_scripts/rofi/rofi_mako.sh",
+        "on-click-middle": "~/user_scripts/waybar/mako.sh --clear && pkill -RTMIN+8 waybar",
+        "on-click-right": "makoctl mode -t do-not-disturb && pkill -RTMIN+8 waybar",
+        "signal": 8,
+        "escape": true
+    },
+
+    "tray": {
+        "icon-size": 16,
+        "spacing": 5,
+        "show-passive-items": true
+    },
+
+    "custom/power": {
+        "format": "⏻",
+        "tooltip-format": "Power Menu\n\nLMB: Wlogout\nRMB: Lock Screen",
+        "on-click": "uwsm-app -- ~/user_scripts/wlogout/wlogout_scale.sh",
+        "on-click-right": "hyprlock"
     },
 
     "custom/inhibit-suspend": {
@@ -339,40 +446,5 @@
         "signal": 9,
         "on-click": "uwsm-app -- ~/user_scripts/waybar/toggle_hypridle.sh",
         "escape": true
-    },
-
-    "custom/notification": {
-        "format": "{icon}",
-        "format-icons": {
-            "notification": "󱅫",
-            "none": "󰂚",
-            "dnd-notification": "󱏧",
-            "dnd-none": "󰂛",
-            "inhibited-notification": "󱅫",
-            "inhibited-none": "󰂚",
-            "dnd-inhibited-notification": "󱏧",
-            "dnd-inhibited-none": "󰂛"
-        },
-        "return-type": "json",
-        "exec-if": "which makoctl",
-        "exec": "~/user_scripts/waybar/mako.sh",
-        "on-click": "~/user_scripts/rofi/rofi_mako.sh",
-        "on-click-right": "makoctl mode -t do-not-disturb && pkill -RTMIN+8 waybar",
-        "signal": 8,
-        "escape": true,
-        "tooltip-format": "Notifications\n\nLMB: Toggle Panel\nRMB: Do Not Disturb"
-    },
-
-    "tray": {
-        "icon-size": 16,
-        "spacing": 5, // Reduced from 8 to 5 to tighten space
-        "show-passive-items": true
-    },
-
-    "custom/power": {
-        "format": "⏻",
-        "tooltip-format": "Power Menu\n\nLMB: Wlogout\nRMB: Lock Screen",
-        "on-click": "uwsm-app -- ~/user_scripts/wlogout/wlogout_scale.sh",
-        "on-click-right": "hyprlock"
     }
 }

@@ -1,6 +1,7 @@
 amd-ucode
 arch-install-scripts
 b43-fwcutter
+archinstall
 base
 bolt
 broadcom-wl
@@ -10,6 +11,7 @@ darkhttpd
 dhcpcd
 diffutils
 dmidecode
+dnsmasq
 dmraid
 dosfstools
 e2fsprogs
@@ -19,13 +21,18 @@ ethtool
 exfatprogs
 f2fs-tools
 fatresize
+foot-terminfo
 gpm
 gptfdisk
+grml-zsh-config
+gpart
 hdparm
 hyperv
 intel-ucode
+irssi
 iw
 iwd
+jfsutils
 less
 libfido2
 libusb-compat
@@ -38,6 +45,7 @@ nvim
 mdadm
 mkinitcpio
 mkinitcpio-archiso
+mtools
 mkinitcpio-nfs-utils
 mmc-utils
 modemmanager
