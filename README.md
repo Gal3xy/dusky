@@ -1,4 +1,4 @@
-## If you need help with installation or troubleshooting, join the Discord server.
+## If you need help with installation, troubleshooting or just want to hangout, join the Discord server.
 
 
 [Join Discord Server][discord]
