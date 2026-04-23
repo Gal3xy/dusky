@@ -8,27 +8,23 @@
     "reload_style_on_change": true,
 
     // =========================================================
-    // MODULE ORDER
+    // PERFECTLY SYMMETRICAL LAYOUT
     // =========================================================
 
     "modules-left": [
         "group/launcher-drawer",
-        "custom/firefox",
-        "custom/terminal",
-        "custom/text-editor",
-        "custom/files",
+        "group/apps-strip",
         "group/updates-drawer",
-        "group/net-drawer"
+        "group/group-tools"
     ],
     "modules-center": [
         "wlr/taskbar"
     ],
     "modules-right": [
-        "group/group-tools",
+        "group/net-drawer",
         "tray",
-        "clock",
         "custom/notifs",
-        "group/battery-drawer"
+        "group/hardware-drawer"
     ],
 
     // =========================================================
@@ -45,7 +41,7 @@
     },
 
     // =========================================================
-    // DRAWERS (LEFT WING)
+    // DRAWERS & GROUPS (LEFT WING)
     // =========================================================
 
     "group/launcher-drawer": {
@@ -64,6 +60,16 @@
         ]
     },
 
+    "group/apps-strip": {
+        "orientation": "horizontal",
+        "modules": [
+            "custom/firefox",
+            "custom/terminal",
+            "custom/text-editor",
+            "custom/files"
+        ]
+    },
+
     "group/updates-drawer": {
         "orientation": "horizontal",
         "drawer": {
@@ -78,30 +84,12 @@
         ]
     },
 
-    "group/net-drawer": {
-        "orientation": "horizontal",
-        "drawer": {
-            "transition-duration": 400,
-            "children-class": "net-drawer",
-            "transition-left-to-right": true
-        },
-        "modules": [
-            "custom/net-speed",
-            "network",
-            "bluetooth"
-        ]
-    },
-
-    // =========================================================
-    // DRAWERS (RIGHT WING)
-    // =========================================================
-
     "group/group-tools": {
         "orientation": "horizontal",
         "drawer": {
             "transition-duration": 400,
             "children-class": "other-apps",
-            "transition-left-to-right": false
+            "transition-left-to-right": true
         },
         "modules": [
             "custom/snip",
@@ -110,22 +98,48 @@
         ]
     },
 
-    "group/battery-drawer": {
+    // =========================================================
+    // DRAWERS & GROUPS (RIGHT WING)
+    // =========================================================
+
+    "group/net-drawer": {
         "orientation": "horizontal",
         "drawer": {
             "transition-duration": 400,
-            "children-class": "battery-drawer",
+            "children-class": "net-drawer",
             "transition-left-to-right": false
         },
         "modules": [
-            "battery",
+            "custom/net-speed",
+            "network",
+            "bluetooth"
+        ]
+    },
+
+    "group/hardware-drawer": {
+        "orientation": "horizontal",
+        "drawer": {
+            "transition-duration": 400,
+            "children-class": "hardware-drawer",
+            "transition-left-to-right": false
+        },
+        "modules": [
+            "group/time-batt",
             "backlight",
             "pulseaudio#output"
         ]
     },
 
+    "group/time-batt": {
+        "orientation": "horizontal",
+        "modules": [
+            "clock",
+            "battery"
+        ]
+    },
+
     // =========================================================
-    // LEFT MODULES (APPS, NETWORK, UPDATES & LAUNCHER)
+    // MODULE DEFINITIONS
     // =========================================================
 
     "custom/launcher": {
@@ -145,26 +159,14 @@
         "escape": true
     },
 
-    "custom/lock": {
-        "format": "󰍁",
-        "tooltip": true,
-        "tooltip-format": "Lock",
-        "on-click": "$HOME/user_scripts/hyprlock/lock.sh"
-    },
+    "custom/lock": { "format": "󰍁", "on-click": "$HOME/user_scripts/hyprlock/lock.sh" },
+    "custom/reboot": { "format": "󰜉", "on-click": "systemctl reboot" },
+    "custom/quit": { "format": "󰗼", "on-click": "hyprctl dispatch exit" },
 
-    "custom/reboot": {
-        "format": "󰜉",
-        "tooltip": true,
-        "tooltip-format": "Reboot",
-        "on-click": "systemctl reboot"
-    },
-
-    "custom/quit": {
-        "format": "󰗼",
-        "tooltip": true,
-        "tooltip-format": "Logout",
-        "on-click": "hyprctl dispatch exit"
-    },
+    "custom/firefox": { "format": "", "tooltip": true, "tooltip-format": "Browser", "on-click": "firefox" },
+    "custom/terminal": { "format": "", "tooltip": true, "tooltip-format": "Terminal", "on-click": "kitty" },
+    "custom/text-editor": { "format": "󰏫", "tooltip": true, "tooltip-format": "GNOME Text Editor", "on-click": "uwsm-app -- gnome-text-editor" },
+    "custom/files": { "format": "", "tooltip": true, "tooltip-format": "File Manager", "on-click": "nemo" },
 
     "custom/updates-trigger": {
         "format": "",
@@ -180,6 +182,28 @@
         "format": "󰏔 {}",
         "tooltip": true,
         "on-click": "uwsm-app -- kitty sh -c 'command -v yay >/dev/null && yay || paru'"
+    },
+
+    "custom/snip": {
+        "format": "",
+        "tooltip": true,
+        "tooltip-format": "Screenshot",
+        "on-click": "uwsm-app -- ~/user_scripts/images/dusky_screenshot.sh --region --freeze --no-notify --smart",
+        "on-click-right": "uwsm-app -- ~/user_scripts/images/dusky_screenshot.sh --region --freeze --annotate --no-notify --tool arrow --smart"
+    },
+
+    "custom/clip": {
+        "format": "",
+        "tooltip": true,
+        "tooltip-format": "Clipboard",
+        "on-click": "uwsm-app -- pkill rofi; rofi -modi 'clipboard:~/user_scripts/rofi/rofi_cliphist.sh' -show clipboard"
+    },
+
+    "custom/calculator": {
+        "format": "",
+        "tooltip": true,
+        "tooltip-format": "Calculator",
+        "on-click": "uwsm-app -- pkill rofi; ~/user_scripts/rofi/calculator.sh"
     },
 
     "custom/net-speed": {
@@ -210,71 +234,9 @@
         "on-click-right": "uwsm-app -- kitty --class bluetui -e bluetui"
     },
 
-    "custom/firefox": {
-        "format": "",
-        "tooltip": true,
-        "tooltip-format": "Browser",
-        "on-click": "firefox"
-    },
-
-    "custom/terminal": {
-        "format": "",
-        "tooltip": true,
-        "tooltip-format": "Terminal",
-        "on-click": "kitty"
-    },
-
-    "custom/text-editor": {
-        "format": "󰏫",
-        "tooltip": true,
-        "tooltip-format": "GNOME Text Editor",
-        "on-click": "uwsm-app -- gnome-text-editor"
-    },
-
-    "custom/files": {
-        "format": "",
-        "tooltip": true,
-        "tooltip-format": "File Manager",
-        "on-click": "nemo"
-    },
-
-    // =========================================================
-    // RIGHT MODULES (TOOLS, TRAY & TELEMETRY)
-    // =========================================================
-
-    "custom/snip": {
-        "format": "",
-        "tooltip": true,
-        "tooltip-format": "Screenshot",
-        "on-click": "uwsm-app -- ~/user_scripts/images/dusky_screenshot.sh --region --freeze --no-notify --smart",
-        "on-click-right": "uwsm-app -- ~/user_scripts/images/dusky_screenshot.sh --region --freeze --annotate --no-notify --tool arrow --smart"
-    },
-
-    "custom/clip": {
-        "format": "",
-        "tooltip": true,
-        "tooltip-format": "Clipboard",
-        "on-click": "uwsm-app -- pkill rofi; rofi -modi 'clipboard:~/user_scripts/rofi/rofi_cliphist.sh' -show clipboard"
-    },
-
-    "custom/calculator": {
-        "format": "",
-        "tooltip": true,
-        "tooltip-format": "Calculator",
-        "on-click": "uwsm-app -- pkill rofi; ~/user_scripts/rofi/calculator.sh"
-    },
-
     "tray": {
         "icon-size": 20,
         "spacing": 10
-    },
-
-    "clock": {
-        "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>",
-        "format-alt": "{:%d-%m-%Y}",
-        "format": "{:%I:%M %p}",
-        "on-click-right": "uwsm-app -- gnome-clocks",
-        "on-click-middle": "uwsm-app -- kitty --class peaclock -e peaclock"
     },
 
     "custom/notifs": {
@@ -290,15 +252,18 @@
         "tooltip-format": "Notifications\nLMB: Toggle Panel\nMMB: Clear All\nRMB: Do Not Disturb"
     },
 
+    "clock": {
+        "format": "{:%I:%M}",
+        "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>",
+        "on-click-right": "uwsm-app -- gnome-clocks",
+        "on-click-middle": "uwsm-app -- kitty --class peaclock -e peaclock"
+    },
+
     "battery": {
-        "states": {
-            "good": 95,
-            "warning": 30,
-            "critical": 15
-        },
-        "format": "{icon} {capacity}%",
-        "format-charging": "󰂄 {capacity}%",
-        "format-plugged": "󰂄 {capacity}%",
+        "states": { "good": 95, "warning": 30, "critical": 15 },
+        "format": "{icon}  {capacity}%",
+        "format-charging": "󰂄  {capacity}%",
+        "format-plugged": "󰂄  {capacity}%",
         "format-icons": ["󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"],
         "tooltip-format": "Time: {timeTo}\nHealth: {health}%\nPower Draw: {power:.2f} W",
         "on-click": "~/user_scripts/tlpctl/tlpctl.sh set balanced",
