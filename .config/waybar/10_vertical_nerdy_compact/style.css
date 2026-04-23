@@ -50,7 +50,7 @@ tooltip label {
 }
 
 /* --- Group Pill Backgrounds (Fixed Visibility) --- */
-box#group-media, box#group-hardware, box#group-utils, box#group-connections, box#group-bottom {
+box#group-media, box#group-hardware, box#group-updates-drawer, box#group-utils, box#group-connections, box#group-bottom {
     background-color: @surface_container_highest;
     border-radius: 12px;
     padding: 6px 0px;
@@ -61,7 +61,8 @@ box#group-media, box#group-hardware, box#group-utils, box#group-connections, box
 #battery, #cpu, #memory, #temperature,
 #pulseaudio, #backlight, #network, #bluetooth, #tray,
 #custom-theme, #custom-power, #custom-notification, #custom-inhibit-suspend,
-#custom-app-tray, #custom-network, #custom-audiorouter, #custom-cava {
+#custom-app-tray, #custom-network, #custom-audiorouter, #custom-cava, 
+#custom-updates, #custom-updates-trigger {
     padding: 0px;
     margin: 3px 0px; 
     background-color: transparent;
@@ -168,7 +169,7 @@ box#group-bottom {
 /* --- Other Custom Modules --- */
 #bluetooth { color: @secondary; }
 #custom-power { color: @error; font-size: 12px; }
-#custom-updates { color: @tertiary; font-weight: bold; }
+#custom-updates, #custom-updates-trigger { color: @tertiary; font-weight: bold; }
 #custom-theme { color: @secondary; }
 #custom-notification, #custom-inhibit-suspend, #custom-app-tray { color: @on_surface_variant; }
 #custom-audiorouter.active { color: @primary; }
@@ -180,7 +181,7 @@ box#group-bottom {
 #pulseaudio:hover, #backlight:hover, #bluetooth:hover, #custom-network:hover,
 #custom-theme:hover, #custom-power:hover, #custom-notification:hover,
 #custom-audiorouter:hover, #custom-app-tray:hover, #custom-cava:hover,
-#custom-updates:hover {
+#custom-updates:hover, #custom-updates-trigger:hover {
     color: @primary;
     text-shadow: 0 0 4px alpha(@primary, 0.5);
 }

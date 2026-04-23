@@ -23,6 +23,7 @@
         
         "modules-right": [
             "custom/cava",
+            "group/updates-drawer",
             "group/utils",
             "group/connections",
             "clock",
@@ -42,18 +43,20 @@
             "modules": [
                 "cpu",
                 "memory",
-                "group/temp_drawer"
+                "temperature"
             ]
         },
 
-        "group/temp_drawer": {
+        "group/updates-drawer": {
             "orientation": "inherit",
             "drawer": {
-                "transition-duration": 300,
-                "transition-left-to-right": true
+                "transition-duration": 400,
+                "children-class": "updates-drawer",
+                "click-to-reveal": false,
+                "transition-left-to-right": false
             },
             "modules": [
-                "temperature",
+                "custom/updates-trigger",
                 "custom/updates"
             ]
         },
@@ -73,7 +76,7 @@
         },
 
         "group/connections": {
-             "orientation": "inherit",
+            "orientation": "inherit",
             "modules": [
                 "custom/network",
                 "bluetooth"
@@ -82,7 +85,7 @@
 
         "group/bottom": {
             "orientation": "inherit",
-             "drawer": {
+            "drawer": {
                 "transition-duration": 300,
                 "transition-left-to-right": false
             },
@@ -251,13 +254,24 @@
             "exec": "$HOME/user_scripts/waybar/network/network_meter_calling.sh --vertical"
         },
 
+        "custom/updates-trigger": {
+            "justify": "center",
+            "align": 0.5,
+            "format": "",
+            "exec": "echo ''",
+            "exec-if": "grep -q '\"class\":\"pending\"' ~/.config/dusky/settings/waybar_update_counter_v 2>/dev/null",
+            "interval": 5,
+            "tooltip": false
+        },
+
         "custom/updates": {
             "justify": "center",
             "align": 0.5,
             "exec": "tail -F ~/.config/dusky/settings/waybar_update_counter_v 2>/dev/null",
             "return-type": "json",
             "format": "{}",
-            "tooltip": true
+            "tooltip": true,
+            "on-click": "uwsm-app -- kitty sh -c 'command -v yay >/dev/null && yay || paru'"
         },
 
         "custom/notification": {

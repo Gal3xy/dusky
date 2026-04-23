@@ -61,6 +61,7 @@ tooltip label {
 
 #network,
 #custom-net-speed,
+#custom-net-speed-trigger,
 #bluetooth,
 #custom-weather,
 #custom-updates-trigger,
@@ -204,6 +205,7 @@ tooltip label {
 #clock.date:hover,
 #network:hover,
 #custom-net-speed:hover,
+#custom-net-speed-trigger:hover,
 #bluetooth:hover,
 #custom-updates-trigger:hover,
 #custom-updates:hover,

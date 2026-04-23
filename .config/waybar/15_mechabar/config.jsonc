@@ -9,9 +9,10 @@
 	],
 	"modules-center": [
 		"custom/left_div#2",
-		"network",
-		"custom/net-speed",
+    "group/net-speed-drawer",
+		"group/updates-drawer",
 		"bluetooth",
+		"network",
 		"custom/left_div#3",
 		"memory",
 		"custom/left_div#4",
@@ -26,7 +27,6 @@
 		"clock#date",
 		"custom/right_div#4",
 		"custom/weather",
-		"group/updates-drawer",
 		"custom/right_div#5"
 	],
 	"modules-right": [
@@ -217,10 +217,32 @@
 		]
 	},
 
-	"custom/updates-trigger": {
-		"format": "",
-		"tooltip": false
-	},
+  "custom/net-speed-trigger": {
+        "format": "⇵",
+        "tooltip": false
+    },
+
+    "group/net-speed-drawer": {
+        "orientation": "horizontal",
+        "drawer": {
+            "transition-duration": 400,
+            "children-class": "net-speed-drawer",
+            "click-to-reveal": false,
+            "transition-left-to-right": true
+        },
+        "modules": [
+            "custom/net-speed-trigger",
+            "custom/net-speed"
+        ]
+    },
+
+  "custom/updates-trigger": {
+    "format": "",
+    "exec": "echo ''",
+    "exec-if": "grep -q '\"class\":\"pending\"' ~/.config/dusky/settings/waybar_update_counter_h 2>/dev/null",
+    "interval": 5,
+    "tooltip": false
+  },
 
 	"custom/updates": {
 		"exec": "tail -F ~/.config/dusky/settings/waybar_update_counter_h 2>/dev/null",
@@ -256,10 +278,11 @@
 		"modules": ["custom/mpris-trigger", "mpris"]
 	},
 
-	"custom/mpris-trigger": {
-		"format": "♪",
-		"tooltip": false
-	},
+  "custom/mpris-trigger": {
+        "format": "♪",
+        "on-click": "uwsm-app -- pavucontrol",
+        "tooltip": false
+    },
 
 	"mpris": {
 		"format": "{player_icon} {title} - {artist}",
