@@ -9,18 +9,22 @@
 @define-color glass_hover       alpha(@surface_container_high, 0.9);
 @define-color glass_hover_bright alpha(@surface_container_highest, 0.9);
 @define-color glass_tooltip     alpha(@surface, 0.07);
+@define-color glass_battery_charging alpha(@tertiary_container, 0.25);
+@define-color glass_battery_critical alpha(@error, 0.1);
 
 /* ─────────────────────────────────────────────────────────────────────────────
    TRANSPARENCY TOGGLE
    ───────────────────────────────────────────────────────────────────────────── */
-/* Remove this line to flip the master switch to OPAQUE
-@define-color glass_bar         @surface;
+/* WAYBAR_OPAQUE_SWITCH_START
+@define-color glass_bar         transparent;
 @define-color glass_group       @surface_container;
 @define-color glass_module      @surface_container;
 @define-color glass_hover       @surface_container_high;
 @define-color glass_hover_bright @surface_container_highest;
 @define-color glass_tooltip     @surface;
-   Remove this line to flip the master switch to OPAQUE */
+@define-color glass_battery_charging @surface_container;
+@define-color glass_battery_critical @error;
+WAYBAR_OPAQUE_SWITCH_END */
 
 * {
     border: none;
@@ -308,13 +312,13 @@ window#waybar {
 #battery.plugged,
 #battery.full {
     color: @tertiary;
-    background-color: alpha(@tertiary_container, 0.25);
+    background-color: @glass_battery_charging;
     border: 1px solid alpha(@tertiary, 0.15);
 }
 #battery.warning:not(.charging) { color: @error; }
 #battery.critical:not(.charging) {
     color: @error;
-    background-color: alpha(@error, 0.1);
+    background-color: @glass_battery_critical;
     animation: blink 1s infinite;
 }
 

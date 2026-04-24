@@ -11,13 +11,13 @@
    TRANSPARENCY TOGGLE
    ───────────────────────────────────────────────────────────────────────────── */
 
-/* Remove this line to flip the master switch to OPAQUE
+/* WAYBAR_OPAQUE_SWITCH_START
 
 @define-color glass_module      @surface_container;
 @define-color glass_module_low  @surface_container_low;
 @define-color glass_primary     @primary;
 
-   Remove this line to flip the master switch to OPAQUE */
+WAYBAR_OPAQUE_SWITCH_END */
 
 /* ─────────────────────────────────────────────────────────────────────────────
    RESET & FOUNDATIONS
@@ -93,7 +93,7 @@ window#waybar {
     padding: 0 2px;
     border-radius: 16px;
     color: @on_surface_variant;
-    background-color: alpha(@surface_container_highest, 0.5);
+    background-color: alpha(@on_surface, 0.12);
     transition: all 0.2s ease;
 }
 

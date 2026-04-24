@@ -22,6 +22,9 @@ readonly MAKO_GENERATED="${HOME}/.config/matugen/generated/mako-colors"
 readonly ROFI_TEMPLATE="${HOME}/.config/matugen/templates/rofi-colors.rasi"
 readonly ROFI_GENERATED="${HOME}/.config/matugen/generated/rofi-colors.rasi"
 
+# Waybar Targets
+readonly WAYBAR_DIR="${HOME}/.config/waybar"
+
 # Visual Constants
 readonly OP_ACTIVE_ON="0.8"
 readonly OP_INACTIVE_ON="0.6"
@@ -70,39 +73,63 @@ notify() {
     fi
 }
 
-# --- The Architecture: Atomic, Symlink-Safe Sed ---
+# --- The Architecture: Atomic, Symlink-Safe Text Processing ---
 atomic_sed() {
     local target_file="$1"
     shift # Remaining arguments are sed parameters
 
-    # 1. Path Resolution (Symlink Safe)
     local actual_target="${target_file}"
     if [[ -L "${target_file}" ]]; then
         actual_target=$(realpath -m "${target_file}")
     fi
 
-    [[ -w "${actual_target}" ]] || die "Write permission denied for ${actual_target}"
+    [[ -w "${actual_target}" ]] || return 0
 
-    # 2. Secure Temporary Block Allocation
     local target_dir="${actual_target%/*}"
     local temp_file
     temp_file=$(mktemp "${target_dir}/.hypr_toggle.XXXXXX") || die "Failed to allocate temp file."
     
-    # Register temp file for trap cleanup
     TEMP_FILES_TO_CLEAN+=("${temp_file}")
 
-    # 3. Metadata Cloning
     command cp -pf "${actual_target}" "${temp_file}"
 
-    # 4. Surgical Editing (Running sed -i on the temp file)
     if ! sed -i "$@" "${temp_file}" 2>&1; then
         die "Failed to process sed commands on ${actual_target}"
     fi
 
-    # 5. Targeted VFS Cache Flush
     sync "${temp_file}" || true
 
-    # 6. Atomic Swap
+    if ! command mv -f "${temp_file}" "${actual_target}"; then
+        die "Atomic swap failed for ${actual_target}"
+    fi
+}
+
+atomic_awk() {
+    local target_file="$1"
+    local awk_script="$2"
+    local target_state="$3"
+
+    local actual_target="${target_file}"
+    if [[ -L "${target_file}" ]]; then
+        actual_target=$(realpath -m "${target_file}")
+    fi
+
+    [[ -w "${actual_target}" ]] || return 0
+
+    local target_dir="${actual_target%/*}"
+    local temp_file
+    temp_file=$(mktemp "${target_dir}/.hypr_toggle.XXXXXX") || die "Failed to allocate temp file."
+    
+    TEMP_FILES_TO_CLEAN+=("${temp_file}")
+
+    command cp -pf "${actual_target}" "${temp_file}"
+
+    if ! awk -v state="$target_state" "$awk_script" "${actual_target}" > "${temp_file}"; then
+        die "Failed to process awk script on ${actual_target}"
+    fi
+
+    sync "${temp_file}" || true
+
     if ! command mv -f "${temp_file}" "${actual_target}"; then
         die "Atomic swap failed for ${actual_target}"
     fi
@@ -204,10 +231,8 @@ atomic_sed "$CONFIG_FILE" \
 
 
 # 2. Update Dynamic UI Targets
-# Architecture Hook: Append new components (e.g., Waybar, SwayOSD) below using the established pattern.
 
 # --- Mako ---
-# Strict regex for {{variable}}aa and #RRGGBBaa
 if [[ -w "$MAKO_TEMPLATE" ]]; then
     atomic_sed "$MAKO_TEMPLATE" "s/^\([[:space:]]*background-color={{[^}]*}}\)[0-9a-fA-F]\{2\}/\1${NEW_UI_ALPHA}/"
 fi
@@ -216,7 +241,6 @@ if [[ -w "$MAKO_GENERATED" ]]; then
 fi
 
 # --- Rofi ---
-# Strict regex targeting "surface: {{variable}}aa;" and "surface: #RRGGBBaa;"
 if [[ -w "$ROFI_TEMPLATE" ]]; then
     atomic_sed "$ROFI_TEMPLATE" "s/^\([[:space:]]*surface[[:space:]]*:[[:space:]]*{{[^}]*}}\)[0-9a-fA-F]\{2\};/\1${NEW_UI_ALPHA};/"
 fi
@@ -224,12 +248,35 @@ if [[ -w "$ROFI_GENERATED" ]]; then
     atomic_sed "$ROFI_GENERATED" "s/^\([[:space:]]*surface[[:space:]]*:[[:space:]]*#[0-9a-fA-F]\{6\}\)[0-9a-fA-F]\{2\};/\1${NEW_UI_ALPHA};/"
 fi
 
-# --- Waybar (Future Extension Example) ---
-# readonly WAYBAR_STYLE="${HOME}/.config/waybar/style.css"
-# if [[ -w "$WAYBAR_STYLE" ]]; then
-#    # Example regex targeting a background hex code
-#    atomic_sed "$WAYBAR_STYLE" "s/\(background-color:[[:space:]]*#[0-9a-fA-F]\{6\}\)[0-9a-fA-F]\{2\};/\1${NEW_UI_ALPHA};/"
-# fi
+# --- Waybar Recursive Engine ---
+if [[ -d "$WAYBAR_DIR" ]]; then
+    # Awk state-machine to auto-migrate legacy strings to structural markers and toggle cleanly.
+    read -r -d '' AWK_WAYBAR_SCRIPT << 'EOF' || true
+        /Remove this line to flip the master switch to OPAQUE/ {
+            count++
+            if (count % 2 == 1) {
+                print "/* WAYBAR_OPAQUE_SWITCH_START" (state == "off" ? " */" : "")
+            } else {
+                print (state == "off" ? "/* " : "") "WAYBAR_OPAQUE_SWITCH_END */"
+            }
+            next
+        }
+        /WAYBAR_OPAQUE_SWITCH_START/ {
+            print "/* WAYBAR_OPAQUE_SWITCH_START" (state == "off" ? " */" : "")
+            next
+        }
+        /WAYBAR_OPAQUE_SWITCH_END/ {
+            print (state == "off" ? "/* " : "") "WAYBAR_OPAQUE_SWITCH_END */"
+            next
+        }
+        { print }
+EOF
+
+    # find -type f avoids processing root symlinks twice by isolating the actual structural files
+    while IFS= read -r -d '' style_file; do
+        atomic_awk "$style_file" "$AWK_WAYBAR_SCRIPT" "$TARGET_STATE"
+    done < <(find "$WAYBAR_DIR" -type f -name "style.css" -print0 2>/dev/null)
+fi
 
 
 # --- Apply Changes at Runtime ---
@@ -258,9 +305,10 @@ if command -v makoctl &>/dev/null; then
     makoctl reload &>/dev/null || printf 'Warning: makoctl reload failed.\n' >&2
 fi
 
-# Note: Rofi reads config strictly on execution, so no daemon reload is needed.
-# Waybar reload command (for future use):
-# pkill -SIGUSR2 waybar || true
+# Trigger Waybar hot-reload to apply CSS changes instantaneously
+if command -v pkill &>/dev/null; then
+    pkill -SIGUSR2 waybar || true
+fi
 
 # --- User Feedback ---
 

@@ -28,7 +28,7 @@
    TRANSPARENCY TOGGLE
    ───────────────────────────────────────────────────────────────────────────── */
 
-/* WAYBAR_OPAQUE_SWITCH_START */
+/* WAYBAR_OPAQUE_SWITCH_START
 
 @define-color bg_tooltip              @surface_container_high;
 @define-color bg_modules              @surface_container;
@@ -42,7 +42,7 @@
 @define-color bg_surface_low          @surface_container_low;
 @define-color bg_surface_highest      @surface_container_highest;
 
-/* WAYBAR_OPAQUE_SWITCH_END */
+WAYBAR_OPAQUE_SWITCH_END */
 
 * {
     font-family: "JetBrains Mono Nerd Font Propo", "JetBrainsMono Nerd Font", "JetBrains Mono NF", "JetBrains Mono", "Symbols Nerd Font", "Noto Sans", "DejaVu Sans", sans-serif;
@@ -88,7 +88,6 @@ tooltip label {
     border-radius: 12px;
     padding: 0 6px;
     margin: 2px 0;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 }
 
 .modules-left {
@@ -330,7 +329,7 @@ tooltip label {
 #temperature {
     padding: 0px 4px 0px 5px; 
     font-size: 11px;
-    border-radius: 10px
+    border-radius: 10px;
 }
 
 #cpu {

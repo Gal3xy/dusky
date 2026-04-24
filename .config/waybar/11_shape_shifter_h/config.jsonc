@@ -20,6 +20,7 @@
   ],
 
   "modules-center": [
+    "group/updates-drawer",
     "clock",
     "group/mpris-drawer"
   ],
@@ -32,7 +33,6 @@
     "cpu",
     "memory",
     "battery",
-    "group/updates-drawer",
     "group/power-drawer"
   ],
 

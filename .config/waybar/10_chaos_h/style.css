@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   WAYBAR NEO THEME - Compact Edition
+   WAYBAR NEO THEME - Glassy Edition
    ═══════════════════════════════════════════════════════════════════════════ */
 
 @import url("../../.config/matugen/generated/waybar-colors.css");
@@ -8,9 +8,9 @@
    TRANSLUCENCY CONTROLS (GLASSY MODE)
    Tweak the decimals (0.0 to 1.0) here to adjust granular glassiness.
    ───────────────────────────────────────────────────────────────────────────── */
-@define-color glass_bar         alpha(@surface, 0.1);
-@define-color glass_module      alpha(@surface_container, 0.4);
-@define-color glass_module_dark alpha(@surface_container, 0.5);
+@define-color glass_bar         transparent;
+@define-color glass_module      alpha(@surface_container, 0.6);
+@define-color glass_module_dark alpha(@surface_container, 0.6);
 @define-color glass_hover       alpha(@surface_container_high, 0.25);
 @define-color glass_tooltip     alpha(@surface, 0.08);
 @define-color glass_mpris       alpha(@secondary_container, 0.5);
@@ -27,7 +27,7 @@
    TRANSPARENCY TOGGLE
    ───────────────────────────────────────────────────────────────────────────── */
 
-/* Remove this line to flip the master switch to OPAQUE
+/* WAYBAR_OPAQUE_SWITCH_START
 
 @define-color glass_bar         @surface;
 @define-color glass_module      @surface_container;
@@ -36,7 +36,7 @@
 @define-color glass_tooltip     @surface_container_highest;
 @define-color glass_mpris       @secondary_container;
 
-   Remove this line to flip the master switch to OPAQUE */
+WAYBAR_OPAQUE_SWITCH_END */
 
 /* ─────────────────────────────────────────────────────────────────────────────
    RESET & FOUNDATIONS
@@ -60,9 +60,9 @@ window#waybar {
 
 window#waybar > box {
   background-color: @glass_bar;
-  border-radius: 10px;
-  border: 1px solid alpha(@outline_variant, 0.14);
-  margin: 2px 0;
+  border-radius: 18px;
+  border: none;
+  margin: 4px 0;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -70,19 +70,17 @@ window#waybar > box {
    ───────────────────────────────────────────────────────────────────────────── */
 
 #custom-launcher {
-  padding: 0px 12px 0px 8px;
-  margin: 1px 2px 1px 6px;
-  border-radius: 8px;
+  padding: 0px 13px 2px 8px;
+  margin: 5px 2px 5px 6px;
+  border-radius: 10px;
   background-image: linear-gradient(135deg, @primary_container 0%, @primary_fixed_dim 100%);
   color: @on_primary_container;
-  font-size: 15px;
-  box-shadow: 0 2px 8px alpha(@primary, 0.3);
+  font-size: 19px;
   transition: all 0.2s ease-in-out;
 }
 
 #custom-launcher:hover {
   background-image: linear-gradient(135deg, @primary_fixed_dim 0%, @primary 30%);
-  box-shadow: 0 4px 16px alpha(@primary, 0.3);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -90,8 +88,8 @@ window#waybar > box {
    ───────────────────────────────────────────────────────────────────────────── */
 
 #custom-updates, #custom-updates-trigger {
-  padding: 0px 8px;
-  margin: 1px 2px;
+  padding: 0px 10px;
+  margin: 5px 2px;
   border-radius: 10px;
   background-color: @glass_module_dark;
   color: @secondary;
@@ -110,8 +108,8 @@ window#waybar > box {
    ───────────────────────────────────────────────────────────────────────────── */
 
 #clock, #custom-weather {
-  padding: 0px 5px 0px 5px;
-  margin: 1px 2px;
+  padding: 0px 8px 0px 8px;
+  margin: 5px 2px;
   border-radius: 10px;
   background-color: @glass_module_dark;
   color: @on_surface;
@@ -130,7 +128,7 @@ window#waybar > box {
 
 #custom-notification {
   padding: 0px 12px 0px 9px;
-  margin: 1px 2px;
+  margin: 5px 2px;
   border-radius: 10px;
   background-color: @glass_module_dark;
   color: @on_surface;
@@ -148,9 +146,9 @@ window#waybar > box {
 
 #custom-theme-toggle {
   padding: 0 8px;
-  margin: 1px 2px;
+  margin: 5px 2px;
   border-radius: 10px;
-  background-color: transparent;
+  background-color: @glass_module;
   color: @secondary;
   font-size: 14px;
   transition: all 0.2s ease-in-out;
@@ -167,17 +165,17 @@ window#waybar > box {
 
 #workspaces {
   padding: 0px 0px 0px 0px;
-  margin: 1px 6px;
-  border-radius: 10px;
+  margin: 4px 6px;
+  border-radius: 12px;
   background-color: @glass_module;
   border: 1px solid alpha(@outline_variant, 0.1);
 }
 
 #workspaces button {
   padding: 0px 8px 0px 8px;
-  margin: 1px 2px;
-  min-width: 12px;
-  border-radius: 6px;
+  margin: 3px 2px;
+  min-width: 20px;
+  border-radius: 8px;
   background-color: alpha(@surface_container_highest, 0);
   color: @on_surface_variant;
   font-size: 12px;
@@ -198,10 +196,9 @@ window#waybar > box {
 
 #workspaces button.active {
   padding: 0px 1px 0px 1px;
-  min-width: 28px;
+  min-width: 30px;
   background-image: linear-gradient(135deg, @primary_container 0%, @primary_fixed_dim 100%);
   color: @on_primary_container;
-  box-shadow: 0 2px 8px alpha(@primary, 0.35);
   font-weight: 700;
 }
 
@@ -212,7 +209,6 @@ window#waybar > box {
 
 #workspaces button.active:hover {
   background-image: linear-gradient(135deg, @primary_fixed_dim 0%, @primary 100%);
-  box-shadow: 0 3px 12px alpha(@primary, 0.7);
 }
 
 #workspaces button.urgent {
@@ -233,7 +229,7 @@ window#waybar > box {
 
 #custom-mpris-trigger {
   padding: 0 10px;
-  margin: 1px 2px;
+  margin: 5px 2px;
   border-radius: 10px;
   background-color: @glass_mpris;
   color: @secondary;
@@ -250,7 +246,7 @@ window#waybar > box {
 
 #mpris {
   padding: 0 10px;
-  margin: 1px 2px;
+  margin: 5px 2px;
   border-radius: 10px;
   background-color: @glass_mpris;
   color: @on_secondary_container;
@@ -281,9 +277,9 @@ window#waybar > box {
 
 #network, #custom-net-speed {
   padding: 0px 8px;
-  margin: 1px 2px;
+  margin: 5px 2px;
   background-color: @glass_module;
-  border-radius: 10px;
+  border-radius: 8px;
   color: @on_surface;
   font-size: 11px;
   transition: all 0.2s ease-in-out;
@@ -312,12 +308,12 @@ window#waybar > box {
 #network.wifi { color: @primary_fixed; }
 
 #bluetooth {
-  padding: 0px 8px;
-  margin: 1px 2px;
+  padding: 0px 8px 0px 8px;
+  margin: 5px 2px;
   background-color: @glass_module;
-  border-radius: 10px;
+  border-radius: 8px;
   color: @on_surface;
-  font-size: 12px;
+  font-size: 11px;
   transition: all 0.2s ease-in-out;
 }
 
@@ -331,11 +327,11 @@ window#waybar > box {
 
 #pulseaudio.output {
   padding: 0px 12px 0px 9px;
-  margin: 1px 2px;
+  margin: 5px 2px;
   background-color: @glass_module;
-  border-radius: 10px;
+  border-radius: 8px;
   color: @on_surface;
-  font-size: 12px;
+  font-size: 11px;
   transition: all 0.2s ease-in-out;
 }
 
@@ -348,11 +344,11 @@ window#waybar > box {
 
 #backlight {
   padding: 0px 13px 0px 8px;
-  margin: 1px 2px;
+  margin: 5px 2px;
   border-radius: 10px;
   background-color: @glass_module;
   color: @tertiary;
-  font-size: 12px;
+  font-size: 11px;
   transition: all 0.2s ease-in-out;
 }
 
@@ -364,9 +360,9 @@ window#waybar > box {
 
 #cpu {
   padding: 0 8px;
-  margin: 1px 2px;
+  margin: 5px 2px;
   background-color: @glass_module;
-  border-radius: 10px;
+  border-radius: 8px;
   color: @on_surface_variant;
   font-size: 12px;
   transition: all 0.2s ease-in-out;
@@ -386,9 +382,9 @@ window#waybar > box {
 
 #memory {
   padding: 0 8px;
-  margin: 1px 2px;
+  margin: 5px 2px;
   background-color: @glass_module;
-  border-radius: 10px;
+  border-radius: 8px;
   color: @on_surface_variant;
   font-size: 11px;
   transition: all 0.2s ease-in-out;
@@ -408,9 +404,9 @@ window#waybar > box {
 
 #battery {
   padding: 0px 5px 0px 5px;
-  margin: 1px 2px;
+  margin: 5px 2px;
   background-color: @glass_module_dark;
-  border-radius: 10px;
+  border-radius: 8px;
   color: @on_surface;
   font-weight: 700;
   transition: all 0.2s ease-in-out;
@@ -432,7 +428,6 @@ window#waybar > box {
   color: @on_error;
   background-image: linear-gradient(135deg, @error_container 0%, @error 100%);
   animation: critical-blink 1s ease-in-out infinite;
-  box-shadow: 0 2px 8px alpha(@error, 0.4);
 }
 
 @keyframes critical-blink {
@@ -447,7 +442,7 @@ window#waybar > box {
 
 #custom-inhibit-suspend {
   padding: 0px 12px 0px 9px;
-  margin: 1px 2px;
+  margin: 5px 2px;
   border-radius: 10px;
   background-color: @glass_module_dark;
   color: @on_surface;
@@ -475,19 +470,17 @@ window#waybar > box {
 
 #custom-power {
   padding: 0px 12px 0px 9px;
-  margin: 1px 6px 1px 2px;
+  margin: 5px 6px 5px 2px;
   border-radius: 10px;
   background-image: linear-gradient(135deg, @primary_container 0%, @primary_fixed_dim 100%);
   color: @on_primary_container;
   font-size: 14px;
-  box-shadow: 0 2px 8px alpha(@primary, 0.25);
   transition: all 0.2s ease-in-out;
 }
 
 #custom-power:hover {
   background-color: @primary;
   background-image: none;
-  box-shadow: 0 4px 16px alpha(@error, 0.4);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
