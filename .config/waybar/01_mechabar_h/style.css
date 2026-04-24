@@ -3,6 +3,36 @@
 @define-color hover-fg      alpha(@on_surface, 0.75);
 @define-color outline       shade(@background, 0.5);
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   TRANSLUCENCY CONTROLS (GLASSY MODE)
+   Tweak the decimals (0.0 to 1.0) here to adjust granular glassiness.
+   ───────────────────────────────────────────────────────────────────────────── */
+@define-color glass_bar         alpha(@background, 1.0);
+@define-color glass_outline     alpha(@outline, 1.0);
+@define-color glass_tier_low    alpha(@surface_container_low, 1.0);
+@define-color glass_tier_mid    alpha(@surface, 1.0);
+@define-color glass_tier_high   alpha(@surface_container_high, 1.0);
+@define-color glass_apex        alpha(@secondary, 1.0);
+@define-color glass_tooltip     alpha(@background, 0.06);
+@define-color glass_menu        alpha(@background, 1.0);
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   TRANSPARENCY TOGGLE
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* WAYBAR_OPAQUE_SWITCH_START
+
+@define-color glass_bar         @background;
+@define-color glass_outline     @outline;
+@define-color glass_tier_low    @surface_container_low;
+@define-color glass_tier_mid    @surface;
+@define-color glass_tier_high   @surface_container_high;
+@define-color glass_apex        @secondary;
+@define-color glass_tooltip     @background;
+@define-color glass_menu        @background;
+
+WAYBAR_OPAQUE_SWITCH_END */
+
 * {
 	/* ignore GTK theme */
 	all: initial;
@@ -56,7 +86,7 @@ tooltip label {
 
 #custom-left_div.2,
 #custom-right_div.5 {
-	color: @surface_container_low;
+	color: @glass_tier_low;
 }
 
 #network,
@@ -66,7 +96,7 @@ tooltip label {
 #custom-weather,
 #custom-updates-trigger,
 #custom-updates {
-	background-color: @surface_container_low;
+	background-color: @glass_tier_low;
 	padding: 0 6px;
 }
 
@@ -76,13 +106,13 @@ tooltip label {
 
 #custom-left_div.3,
 #custom-right_div.4 {
-	background-color: @surface_container_low;
-	color: @surface;
+	background-color: @glass_tier_low;
+	color: @glass_tier_mid;
 }
 
 #memory,
 #clock.date {
-	background-color: @surface;
+	background-color: @glass_tier_mid;
 	padding: 0 6px;
 }
 
@@ -92,13 +122,13 @@ tooltip label {
 
 #custom-left_div.4,
 #custom-right_div.3 {
-	background-color: @surface;
-	color: @surface_container_high;
+	background-color: @glass_tier_mid;
+	color: @glass_tier_high;
 }
 
 #cpu,
 #clock.time {
-	background-color: @surface_container_high;
+	background-color: @glass_tier_high;
 	padding: 0 6px;
 }
 
@@ -108,16 +138,16 @@ tooltip label {
 
 #custom-left_inv.1,
 #custom-right_inv.1 {
-	color: @surface_container_high;
+	color: @glass_tier_high;
 }
 
 #custom-left_div.5,
 #custom-right_div.2 {
-	color: @secondary;
+	color: @glass_apex;
 }
 
 #custom-distro {
-	background-color: @secondary;
+	background-color: @glass_apex;
 	color: @background;
 	padding: 0 10px 0 5px;
 }
@@ -128,10 +158,10 @@ tooltip label {
 
 #custom-left_div.1,
 #custom-right_div.1 {
-	color: @surface_container_low;
+	color: @glass_tier_low;
 }
 #workspaces {
-	background-color: @surface_container_low;
+	background-color: @glass_tier_low;
 	padding: 0 1px;
 }
 #workspaces button.active label,
@@ -140,7 +170,7 @@ tooltip label {
 }
 
 #custom-notifications {
-	background-color: @surface_container_low;
+	background-color: @glass_tier_low;
 	padding: 0 6px;
 }
 
@@ -152,41 +182,41 @@ tooltip label {
 
 #mpris,
 #custom-mpris-trigger {
-	background-color: @surface_container_low;
+	background-color: @glass_tier_low;
 	padding: 0 5px;
 }
 
 #custom-left_div.6 {
-	color: @surface_container_low;
+	color: @glass_tier_low;
 }
 #pulseaudio,
 #wireplumber {
-	background-color: @surface;
+	background-color: @glass_tier_mid;
 }
 
 #custom-left_div.7 {
-	background-color: @surface_container_low;
-	color: @surface;
+	background-color: @glass_tier_low;
+	color: @glass_tier_mid;
 }
 #backlight {
-	background-color: @surface_container_high;
+	background-color: @glass_tier_high;
 	padding: 0 6px;
 }
 
 #custom-left_div.8 {
-	background-color: @surface;
-	color: @surface_container_high;
+	background-color: @glass_tier_mid;
+	color: @glass_tier_high;
 }
 #battery {
-	background-color: @surface_container_high;
+	background-color: @glass_tier_high;
 	padding: 0 6px;
 }
 #custom-left_inv.2 {
-	color: @surface_container_high;
+	color: @glass_tier_high;
 }
 
 #custom-power {
-	background-color: @background;
+	background-color: @glass_bar;
 	color: @secondary;
 	padding: 0 10px 0 10px;
 }
@@ -252,11 +282,11 @@ tooltip label {
 }
 
 #waybar {
-	background-color: @outline;
+	background-color: @glass_outline;
 }
 #waybar > box {
 	margin: 4px;
-	background-color: @background;
+	background-color: @glass_bar;
 }
 
 button {
@@ -272,14 +302,14 @@ button:hover {
 tooltip {
 	border: 2px solid @on_background;
 	border-radius: 10px;
-	background-color: @background;
+	background-color: @glass_tooltip;
 }
 tooltip > box {
 	padding: 0 6px;
 }
 
 menu {
-	background-color: @background;
+	background-color: @glass_menu;
 	border: 2px solid @on_background;
 	border-radius: 10px;
 }
