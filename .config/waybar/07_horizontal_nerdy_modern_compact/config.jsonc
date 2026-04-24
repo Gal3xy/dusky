@@ -24,6 +24,7 @@
     "modules-center": [
         "custom/net-speed",
         "clock",
+        "group/updates-drawer",
         "privacy"
     ],
     
@@ -136,13 +137,12 @@
     },
 
     // ===================================================================
-    // CENTER MODULES
+    // CENTER MODULES & GROUPS
     // ===================================================================
     "clock": {
         "format": "{:%I:%M %p}",
         "format-alt": " {:%A, %d %B %Y  •  %I:%M:%S %p}",
         "tooltip-format": "<big>{:%A, %d %B %Y}</big>\n<tt><small>{calendar}</small></tt>",
-    //    "timezone": "Asia/Kolkata",
         "interval": 1,
         "calendar": {
             "mode": "year",
@@ -164,6 +164,36 @@
         },
         "on-click": "uwsm-app -- gnome-clocks",
         "on-click-middle": "uwsm-app -- kitty --class peaclock -e peaclock"
+    },
+
+    "group/updates-drawer": {
+        "orientation": "horizontal",
+        "drawer": {
+            "transition-duration": 400,
+            "children-class": "updates-drawer",
+            "click-to-reveal": false,
+            "transition-left-to-right": true
+        },
+        "modules": [
+            "custom/updates-trigger",
+            "custom/updates"
+        ]
+    },
+
+    "custom/updates-trigger": {
+        "format": "",
+        "exec": "echo ''",
+        "exec-if": "grep -q '\"class\":\"pending\"' ~/.config/dusky/settings/waybar_update_counter_h 2>/dev/null",
+        "interval": 5,
+        "tooltip": false
+    },
+
+    "custom/updates": {
+        "exec": "tail -F ~/.config/dusky/settings/waybar_update_counter_h 2>/dev/null",
+        "return-type": "json",
+        "format": "󰏔 {}",
+        "tooltip": true,
+        "on-click": "uwsm-app -- kitty sh -c 'command -v yay >/dev/null && yay || paru'"
     },
 
     "privacy": {

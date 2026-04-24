@@ -7,6 +7,30 @@
 
 @import url("../../.config/matugen/generated/waybar-colors.css");
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   TRANSPARENCY DEFINITIONS 
+   ───────────────────────────────────────────────────────────────────────────── */
+@define-color glass_bar           alpha(@surface_container, 0.4);
+@define-color glass_workspaces    alpha(@surface_container_low, 0.4);
+@define-color glass_hover         alpha(@surface_container_highest, 0.6);
+@define-color glass_tooltip       alpha(@surface_container_high, 0.8);
+@define-color glass_border        alpha(@outline_variant, 0.5);
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   TRANSPARENCY TOGGLE
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Remove this line to flip the master switch to OPAQUE
+
+@define-color glass_bar           @surface_container;
+@define-color glass_workspaces    @surface_container_low;
+@define-color glass_hover         @surface_container_highest;
+@define-color glass_tooltip       @surface_container_high;
+@define-color glass_border        @outline_variant;
+
+   Remove this line to flip the master switch to OPAQUE */
+
+
 /* ═══════════════════════════════════════════════════════════════════════════
    RESET & BASE - COMPACT
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -34,9 +58,9 @@ window#waybar.hidden {
    TOOLTIPS
    ═══════════════════════════════════════════════════════════════════════════ */
 tooltip {
-    background-color: @surface_container_high;
+    background-color: @glass_tooltip;
     color: @on_surface;
-    border: 1px solid @outline_variant;
+    border: 1px solid @glass_border;
     border-radius: 8px;
     padding: 6px 10px;
 }
@@ -52,7 +76,7 @@ tooltip label {
 .modules-left,
 .modules-center,
 .modules-right {
-    background-color: @surface_container;
+    background-color: @glass_bar;
     border-radius: 8px;
     padding: 0 2px;
     margin: 2px 0;
@@ -67,6 +91,8 @@ tooltip label {
 #window,
 #custom-net-speed,
 #clock,
+#custom-updates,
+#custom-updates-trigger,
 #privacy,
 #cpu,
 #memory,
@@ -94,6 +120,8 @@ tooltip label {
 /* Hover states */
 #custom-launcher:hover,
 #clock:hover,
+#custom-updates:hover,
+#custom-updates-trigger:hover,
 #custom-net-speed:hover,
 #cpu:hover,
 #memory:hover,
@@ -108,7 +136,7 @@ tooltip label {
 #custom-inhibit-suspend:hover,
 #custom-notification:hover,
 #custom-power:hover {
-    background-color: @surface_container_highest;
+    background-color: @glass_hover;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -144,7 +172,7 @@ tooltip label {
    WORKSPACES - COMPACT BUTTONS
    ═══════════════════════════════════════════════════════════════════════════ */
 #workspaces {
-    background-color: @surface_container_low;
+    background-color: @glass_workspaces;
     padding: 0 2px;
     margin: 2px 1px;
     border-radius: 6px;
@@ -163,7 +191,7 @@ tooltip label {
 }
 
 #workspaces button:hover {
-    background-color: @surface_container_highest;
+    background-color: @glass_hover;
     color: @primary;
 }
 
@@ -219,7 +247,7 @@ tooltip label {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   CLOCK - CENTER PIECE
+   CLOCK & UPDATES - CENTER PIECE
    ═══════════════════════════════════════════════════════════════════════════ */
 #clock {
     background-color: @primary_container;
@@ -234,6 +262,11 @@ tooltip label {
 #clock:hover {
     background-color: @primary;
     color: @on_primary;
+}
+
+#custom-updates-trigger,
+#custom-updates {
+    color: @secondary;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -295,7 +328,7 @@ tooltip label {
 
 #temperature:hover {
     color: @on_surface;
-    background-color: @surface_container_highest;
+    background-color: @glass_hover;
 }
 
 /* Warning & Critical States */
@@ -433,7 +466,6 @@ tooltip label {
    SYSTEM CONTROLS - COMPACT
    ═══════════════════════════════════════════════════════════════════════════ */
 #custom-theme,
-
 #custom-inhibit-suspend {
     font-size: 12px;
     padding: 0px 3px 0px 4px;
@@ -465,7 +497,7 @@ tooltip label {
 }
 
 #custom-inhibit-suspend:hover {
-    background-color: @surface_container_highest;
+    background-color: @glass_hover;
 }
 
 #custom-notification {
@@ -496,8 +528,8 @@ tooltip label {
 }
 
 #tray menu {
-    background-color: @surface_container_high;
-    border: 1px solid @outline_variant;
+    background-color: @glass_tooltip;
+    border: 1px solid @glass_border;
     border-radius: 8px;
     padding: 4px;
 }
@@ -509,7 +541,7 @@ tooltip label {
 }
 
 #tray menu menuitem:hover {
-    background-color: @surface_container_highest;
+    background-color: @glass_hover;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
