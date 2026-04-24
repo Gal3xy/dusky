@@ -1,9 +1,9 @@
-//Modern Vertical
+// Modern Vertical
 {
     "layer": "top",
     "position": "right",
     "spacing": 0,
-    "width": 30, // Slightly wider to fit the numbers comfortably
+    "width": 30,
     "margin-top": 5,
     "margin-bottom": 5,
     "margin-left": 4,
@@ -15,7 +15,7 @@
     // MODULE LAYOUT
     // ===================================================================
     "modules-left": [ 
-        "clock", 
+        "group/clock-drawer", 
         "group/stats"
     ],
     
@@ -24,15 +24,56 @@
     ],
     
     "modules-right": [ 
-        "custom/network",      
-        "pulseaudio",
+        "group/audio-drawer",
         "battery",
-        "custom/power"
+        "group/power-drawer"
     ],
 
     // ===================================================================
     // MODULE CONFIGURATION
     // ===================================================================
+
+    "group/clock-drawer": {
+        "orientation": "vertical",
+        "drawer": {
+            "transition-duration": 400,
+            "children-class": "clock-drawer",
+            "transition-left-to-right": false
+        },
+        "modules": [
+            "clock",
+            "custom/notification",
+            "custom/updates"
+        ]
+    },
+
+    "group/audio-drawer": {
+        "orientation": "vertical",
+        "drawer": {
+            "transition-duration": 400,
+            "children-class": "audio-drawer",
+            "transition-left-to-right": false
+        },
+        "modules": [
+            "pulseaudio",
+            "backlight",
+            "bluetooth",
+            "custom/network"
+        ]
+    },
+
+    "group/power-drawer": {
+        "orientation": "vertical",
+        "drawer": {
+            "transition-duration": 400,
+            "children-class": "power-drawer",
+            "transition-left-to-right": false
+        },
+        "modules": [
+            "custom/power",
+            "custom/inhibit-suspend"
+        ]
+    },
 
     "hyprland/workspaces": {
         "format": "{name}",
@@ -80,31 +121,89 @@
     "clock": {
         "justify": "center",
         "format": "{:%I\n%M}",
-        "tooltip-format": "{:%A, %d %B %Y}",
+        "tooltip-format": "<big>{:%A, %d %B}</big>\n<tt><small>{calendar}</small></tt>",
+        "interval": 60,
         "on-click": "uwsm-app -- gnome-clocks",
-        "interval": 60
+        "on-click-middle": "uwsm-app -- kitty --class peaclock -e peaclock",
+        "calendar": {
+            "mode": "year",
+            "mode-mon-col": 3,
+            "weeks-pos": "right",
+            "on-scroll": 1,
+            "on-click-right": "mode",
+            "format": {
+                "months": "<span color='#ffead3'><b>{}</b></span>",
+                "days": "<span color='#ecc6d9'><b>{}</b></span>",
+                "weeks": "<span color='#99ffdd'><b>W{}</b></span>",
+                "weekdays": "<span color='#ffcc66'><b>{}</b></span>",
+                "today": "<span color='#ff6699'><b><u>{}</u></b></span>"
+            }
+        },
+        "actions": {
+            "on-click-right": "mode",
+            "on-scroll-up": "shift_up",
+            "on-scroll-down": "shift_down"
+        }
     },
 
-    // --- UPDATED MODULES WITH NUMBERS ---
+    "custom/notification": {
+        "justify": "center",
+        "align": 0.5,
+        "tooltip-format": "Left Click: Launch Mako\nMiddle Click: Clear All\nRight Click: Do Not Disturb",
+        "format": "{}",
+        "return-type": "json",
+        "exec-if": "which makoctl",
+        "exec": "~/user_scripts/waybar/mako.sh --vertical",
+        "interval": 2,
+        "on-click": "~/user_scripts/rofi/rofi_mako.sh",
+        "on-click-middle": "~/user_scripts/waybar/mako.sh --clear && pkill -RTMIN+8 waybar",
+        "on-click-right": "makoctl mode -t do-not-disturb && pkill -RTMIN+8 waybar",
+        "signal": 8,
+        "escape": true
+    },
+
+    "custom/updates": {
+        "justify": "center",
+        "align": 0.5,
+        "exec": "tail -F ~/.config/dusky/settings/waybar_update_counter_v 2>/dev/null",
+        "return-type": "json",
+        "format": "{}",
+        "tooltip": true,
+        "on-click": "uwsm-app -- kitty sh -c 'command -v yay >/dev/null && yay || paru'"
+    },
 
     "pulseaudio": {
-        // Stacked: Icon on top, Volume % below
         "justify": "center",
         "format": "{icon}\n{volume}",
         "format-muted": "󰖁\nMute",
         "on-click": "uwsm-app -- pavucontrol",
+        "on-click-right": "uwsm-app -- \"$HOME/user_scripts/sliders/dusky_sliders.py\"",
         "format-icons": ["", "", ""],
         "tooltip-format": "Volume: {volume}%"
     },
 
-    "battery": {
-        // Stacked: Icon on top, Capacity % below
+    "backlight": {
         "justify": "center",
-        "format": "{icon}\n{capacity}",
-        "format-charging": "\n{capacity}",
-        "format-icons": ["󰂎", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"],
-        "interval": 5,
-        "tooltip-format": "{timeTo}\nHealth: {health}%"
+        "device": "intel_backlight",
+        "format": "{icon}\n{percent}",
+        "format-icons": ["","","","","","","","","","","","","","",""],
+        "tooltip": true,
+        "tooltip-format": "Brightness: {percent}%",
+        "on-click": "uwsm-app -- \"$HOME/user_scripts/sliders/dusky_sliders.py\"",
+        "on-scroll-up": "brightnessctl set +5%",
+        "on-scroll-down": "brightnessctl set 5%-",
+        "min-length": 4,
+        "interval": 60
+    },
+
+    "bluetooth": {
+        "justify": "center",
+        "format": "",
+        "format-disabled": "󰂲",
+        "format-connected": "\n{num_connections}",
+        "tooltip-format": "Devices connected: {num_connections}",
+        "on-click": "uwsm-app -- blueman-manager",
+        "on-click-right": "uwsm-app -- kitty --class bluetui -e bluetui"
     },
 
     "custom/network": {
@@ -117,10 +216,33 @@
         "on-click-middle": "nmcli radio wifi off"
     },
 
+    "battery": {
+        "justify": "center",
+        "format": "{icon}\n{capacity}",
+        "format-charging": "\n{capacity}",
+        "format-icons": ["󰂎", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"],
+        "interval": 5,
+        "tooltip-format": "{timeTo}\nHealth: {health}%"
+    },
+
     "custom/power": {
         "justify": "center",
         "format": "",
-        "tooltip": false,
-        "on-click": "uwsm-app -- ~/user_scripts/wlogout/wlogout_scale.sh"
+        "tooltip": true,
+        "tooltip-format": "Power Menu\nRMB - Control Center",
+        "on-click": "uwsm-app -- ~/user_scripts/wlogout/wlogout_scale.sh",
+        "on-click-right": "uwsm-app -- python3 ~/user_scripts/dusky_system/control_center/dusky_control_center.py"
+    },
+
+    "custom/inhibit-suspend": {
+        "justify": "center",
+        "align": 0.5,
+        "format": "{}",
+        "exec": "if pgrep -x 'hypridle' > /dev/null;\nthen echo '{\"text\": \"󰌾\", \"tooltip\": \"Suspend is enabled.\\nClick to disable.\", \"class\": \"enabled\"}';\nelse echo '{\"text\": \"\", \"tooltip\": \"Suspend is disabled.\\nClick to enable.\", \"class\": \"disabled\"}';\nfi",
+        "return-type": "json",
+        "interval": 5,
+        "signal": 9,
+        "on-click": "uwsm-app -- \"$HOME/user_scripts/waybar/toggle_hypridle.sh\"",
+        "escape": true
     }
 }
