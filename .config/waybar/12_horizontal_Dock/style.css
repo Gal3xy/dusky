@@ -1,5 +1,21 @@
 @import url("../matugen/generated/waybar-colors.css");
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   TRANSPARENCY TOGGLE
+   ───────────────────────────────────────────────────────────────────────────── */
+
+@define-color glass_surface         alpha(@surface, 0.2);
+@define-color glass_surface_dark    alpha(@surface, 1.0);
+@define-color glass_tooltip         alpha(@surface, 0.07);
+
+/* Remove this line to flip the master switch to OPAQUE
+
+@define-color glass_surface         @surface;
+@define-color glass_surface_dark    @surface;
+@define-color glass_tooltip         @surface;
+
+   Remove this line to flip the master switch to OPAQUE */
+
 * {
     border: none;
     border-radius: 0px;
@@ -17,7 +33,7 @@ window#waybar {
 }
 
 .modules-center {
-    background: @surface;
+    background: @glass_surface_dark;
     border-radius: 20px;
     padding: 0 6px;
 }
@@ -35,7 +51,7 @@ tooltip decoration,
 
 tooltip label {
     color: @primary;
-    background-color: @surface;
+    background-color: @glass_tooltip;
     padding: 4px 10px;
     border-radius: 12px;
 }
@@ -49,7 +65,7 @@ tooltip label {
     padding: 0px 2px;
     margin: 0px 2px;
     border-radius: 45px;
-    background-color: @surface;
+    background-color: @glass_surface;
     color: alpha(@tertiary, 0.45);
     transition: all 0.3s ease-in-out;
 }
@@ -77,8 +93,13 @@ tooltip label {
 #window,
 #custom-launcher,
 #custom-notification,
-#submap {
-    background-color: @surface;
+#submap,
+#bluetooth,
+#backlight,
+#custom-inhibit-suspend,
+#custom-updates-trigger,
+#custom-updates {
+    background-color: @glass_surface;
     padding: 0px 6px;
     margin: 3px 4px;
     border-radius: 45px;
@@ -94,13 +115,16 @@ tooltip label {
 #mpris {
     color: @tertiary;
     font-size: 12px;
-    background-color: @surface;
+    background-color: @glass_surface;
     padding: 0 6px;
     margin: 3px 4px;
     border-radius: 45px;
 }
 
-#pulseaudio {
+#pulseaudio,
+#bluetooth,
+#backlight,
+#custom-inhibit-suspend {
     color: @tertiary;
     font-size: 12px;
 }
@@ -120,12 +144,18 @@ tooltip label {
     font-size: 12px;
 }
 
+#custom-updates-trigger,
+#custom-updates {
+    color: @secondary;
+    font-size: 12px;
+}
+
 #custom-cava {
     color: @tertiary;
     padding: 0 6px;
     margin: 3px 4px;
     border-radius: 45px;
-    background-color: @surface;
+    background-color: @glass_surface;
 }
 
 #custom-mpris-trigger {
@@ -133,7 +163,7 @@ tooltip label {
     padding: 0 6px;
     margin: 3px 0 3px 4px;
     border-radius: 45px;
-    background-color: @surface;
+    background-color: @glass_surface;
     font-size: 12px;
 }
 
@@ -142,7 +172,7 @@ tooltip label {
 }
 
 #tray {
-    background-color: @surface;
+    background-color: @glass_surface;
     padding: 0 6px;
     margin: 3px 0;
     border-radius: 45px;
@@ -158,16 +188,15 @@ tooltip label {
 }
 
 .hide-tray-drawer {
-    background-color: @surface;
+    background-color: @glass_surface;
     border-radius: 20px;
     margin-right: 8px;
 }
 
-.cava-mpris-drawer {
-    background-color: transparent;
-}
-
-.mpris-drawer {
+.cava-mpris-drawer,
+.mpris-drawer,
+.battery-drawer,
+.updates-drawer {
     background-color: transparent;
 }
 
