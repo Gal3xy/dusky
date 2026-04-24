@@ -72,11 +72,11 @@ window#waybar > box {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   CLOCK
+   CLOCK & WEATHER
    ───────────────────────────────────────────────────────────────────────────── */
 
-#clock {
-  padding: 0px 5px 0px 5px;
+#clock, #custom-weather {
+  padding: 0px 8px 0px 8px;
   margin: 5px 2px;
   border-radius: 10px;
   background-color: alpha(@surface_container, 0.35);
@@ -85,7 +85,7 @@ window#waybar > box {
   transition: all 0.2s ease-in-out;
 }
 
-#clock:hover {
+#clock:hover, #custom-weather:hover {
   background-color: alpha(@surface_container_highest, 0.9);
   border: 1px solid alpha(@primary, 0.3);
 }
@@ -242,7 +242,7 @@ window#waybar > box {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   NETWORK & DYNAMIC BANDWIDTH METER
+   NETWORK & BLUETOOTH DRAWER
    ───────────────────────────────────────────────────────────────────────────── */
 
 #network, #custom-net-speed {
@@ -277,10 +277,6 @@ window#waybar > box {
 #network.linked, #network.ethernet { color: @tertiary; }
 #network.wifi { color: @primary_fixed; }
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   BLUETOOTH
-   ───────────────────────────────────────────────────────────────────────────── */
-
 #bluetooth {
   padding: 0px 8px 0px 8px;
   margin: 5px 2px;
@@ -313,7 +309,7 @@ window#waybar > box {
 #pulseaudio.output.muted { color: alpha(@on_surface_variant, 0.4); }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   BACKLIGHT
+   BRIGHTNESS & THEME DRAWER
    ───────────────────────────────────────────────────────────────────────────── */
 
 #backlight {
@@ -465,8 +461,8 @@ window#waybar > box {
    ───────────────────────────────────────────────────────────────────────────── */
 
 tooltip {
-  background-color: alpha(@surface_container_high, 0.95);
-  border: 1px solid alpha(@outline_variant, 0.3);
+  background-color: alpha(@surface, 0.45);
+  border: 1px solid alpha(@outline_variant, 0.5);
   border-radius: 12px;
 }
 
