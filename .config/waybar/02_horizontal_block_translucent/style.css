@@ -5,8 +5,8 @@
 @import url("../../.config/matugen/generated/waybar-colors.css");
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   TRANSLUCENCY CONTROLS
-   Tweak the decimals (0.0 to 1.0) here to adjust global glassiness.
+   TRANSLUCENCY CONTROLS (GLASSY MODE)
+   Tweak the decimals (0.0 to 1.0) here to adjust granular glassiness.
    ───────────────────────────────────────────────────────────────────────────── */
 @define-color glass_bar         alpha(@surface, 0.1);
 @define-color glass_module      alpha(@surface_container, 0.4);
@@ -14,6 +14,29 @@
 @define-color glass_hover       alpha(@surface_container_high, 0.25);
 @define-color glass_tooltip     alpha(@surface, 0.08);
 @define-color glass_mpris       alpha(@secondary_container, 0.5);
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   MASTER OPAQUE SWITCH
+   GTK3 CSS cannot compute variables inside alpha() functions. 
+   To toggle off ALL translucency, simply UNCOMMENT the block below by removing
+   the  from the first line. GTK's "last definition wins" rule will instantly 
+   overwrite the glassy variables above and hot-reload Waybar.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   TRANSPARENCY TOGGLE
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/*  Remove this line to flip the master switch to OPAQUE
+
+@define-color glass_bar         @surface;
+@define-color glass_module      @surface_container;
+@define-color glass_module_dark @surface_container;
+@define-color glass_hover       @surface_container_high;
+@define-color glass_tooltip     @surface_container_highest;
+@define-color glass_mpris       @secondary_container;
+
+   Remove this line to flip the master switch to OPAQUE */
 
 /* ─────────────────────────────────────────────────────────────────────────────
    RESET & FOUNDATIONS
