@@ -15,7 +15,7 @@
     // MODULE LAYOUT
     // ===================================================================
     "modules-left": [ 
-        "clock"
+        "group/clock-drawer"
         //"group/stats"
     ],
     
@@ -24,11 +24,61 @@
     ],
     
     "modules-right": [
-        //"custom/network",
-        "pulseaudio",
+        "group/media-drawer",
         "battery",
-        "custom/power"
+        "group/power-drawer"
     ],
+
+    // ===================================================================
+    // MODULE GROUPS (DRAWERS)
+    // ===================================================================
+
+    "group/clock-drawer": {
+        "orientation": "vertical",
+        "drawer": {
+            "transition-duration": 300,
+            "children-class": "clock-drawer",
+            "transition-left-to-right": true
+        },
+        "modules": [
+            "clock",
+            "custom/notification",
+            "custom/updates"
+        ]
+    },
+
+    "group/media-drawer": {
+        "orientation": "vertical",
+        "drawer": {
+            "transition-duration": 300,
+            "children-class": "media-drawer",
+            "transition-left-to-right": false
+        },
+        "modules": [
+            "pulseaudio",
+            "backlight",
+            "bluetooth",
+            "custom/network"
+        ]
+    },
+
+    "group/power-drawer": {
+        "orientation": "vertical",
+        "drawer": {
+            "transition-duration": 300,
+            "children-class": "power-drawer",
+            "transition-left-to-right": false
+        },
+        "modules": [
+            "custom/power",
+            "custom/inhibit-suspend"
+        ]
+    },
+
+    "group/stats": {
+        "orientation": "vertical",
+        "modules": [ "cpu", "memory", "temperature" ]
+    },
 
     // ===================================================================
     // MODULE CONFIGURATION
@@ -40,11 +90,6 @@
         "on-click": "activate",
         "sort-by-number": true,
         "persistent-workspaces": {}
-    },
-
-    "group/stats": {
-        "orientation": "vertical",
-        "modules": [ "cpu", "memory", "temperature" ]
     },
 
     "cpu": {
@@ -86,7 +131,31 @@
         "interval": 60
     },
 
-    // --- UPDATED MODULES WITH NUMBERS ---
+    "custom/notification": {
+        "justify": "center",
+        "align": 0.5,
+        "tooltip-format": "Left Click: Launch Mako\nMiddle Click: Clear All\nRight Click: Do Not Disturb",
+        "format": "{}",
+        "return-type": "json",
+        "exec-if": "which makoctl",
+        "exec": "~/user_scripts/waybar/mako.sh --vertical",
+        "interval": 2,
+        "on-click": "~/user_scripts/rofi/rofi_mako.sh",
+        "on-click-middle": "~/user_scripts/waybar/mako.sh --clear && pkill -RTMIN+8 waybar",
+        "on-click-right": "makoctl mode -t do-not-disturb && pkill -RTMIN+8 waybar",
+        "signal": 8,
+        "escape": true
+    },
+
+    "custom/updates": {
+        "justify": "center",
+        "align": 0.5,
+        "exec": "tail -F ~/.config/dusky/settings/waybar_update_counter_v 2>/dev/null",
+        "return-type": "json",
+        "format": "{}",
+        "tooltip": true,
+        "on-click": "uwsm-app -- kitty sh -c 'command -v yay >/dev/null && yay || paru'"
+    },
 
     "pulseaudio": {
         // Stacked: Icon on top, Volume % below
@@ -98,14 +167,32 @@
         "tooltip-format": "Volume: {volume}%"
     },
 
-    "battery": {
-        // Stacked: Icon on top, Capacity % below
+    "backlight": {
         "justify": "center",
-        "format": "{icon}\n{capacity}",
-        "format-charging": "\n{capacity}",
-        "format-icons": ["󰂎", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"],
-        "interval": 5,
-        "tooltip-format": "{timeTo}\nHealth: {health}%"
+        "align": 0.5,
+        "device": "intel_backlight",
+        "format": "{icon}\n{percent}",
+        "format-icons": ["","","","","","","","","","","","","","",""],
+        "tooltip": true,
+        "tooltip-format": "LMB: Brightness Slider\nRMB: hyprsunset Slider\nMMB: Shaders",
+        "on-click": "uwsm-app -- \"$HOME/user_scripts/sliders/dusky_sliders.py\"",
+        "on-click-right": "uwsm-app -- \"$HOME/user_scripts/sliders/dusky_sliders.py\"",
+        "on-click-middle": "uwsm-app -- \"$HOME/user_scripts/rofi/shader_menu.sh\"",
+        "on-scroll-up": "brightnessctl set +5%",
+        "on-scroll-down": "brightnessctl set 5%-",
+        "min-length": 4,
+        "interval": 60
+    },
+
+    "bluetooth": {
+        "justify": "center",
+        "align": 0.5,
+        "format": "",
+        "format-disabled": "󰂲",
+        "format-connected": "",
+        "tooltip-format": "Devices connected: {num_connections}",
+        "on-click": "uwsm-app -- blueman-manager",
+        "on-click-right": "uwsm-app -- kitty --class bluetui -e bluetui"
     },
 
     "custom/network": {
@@ -118,10 +205,34 @@
         "on-click-middle": "nmcli radio wifi off"
     },
 
+    "battery": {
+        // Stacked: Icon on top, Capacity % below
+        "justify": "center",
+        "format": "{icon}\n{capacity}",
+        "format-charging": "\n{capacity}",
+        "format-icons": ["󰂎", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"],
+        "interval": 5,
+        "tooltip-format": "{timeTo}\nHealth: {health}%"
+    },
+
     "custom/power": {
         "justify": "center",
         "format": "",
-        "tooltip": false,
-        "on-click": "uwsm-app -- ~/user_scripts/wlogout/wlogout_scale.sh"
+        "tooltip": true,
+        "tooltip-format": "Power Menu\n RMB - Control Center",
+        "on-click": "uwsm-app -- ~/user_scripts/wlogout/wlogout_scale.sh",
+        "on-click-right": "uwsm-app -- python3 ~/user_scripts/dusky_system/control_center/dusky_control_center.py"
+    },
+
+    "custom/inhibit-suspend": {
+        "justify": "center",
+        "align": 0.5,
+        "format": "{}",
+        "exec": "if pgrep -x 'hypridle' > /dev/null;\nthen echo '{\"text\": \"󰌾\", \"tooltip\": \"Suspend is enabled.\\nClick to disable.\", \"class\": \"enabled\"}';\nelse echo '{\"text\": \"\", \"tooltip\": \"Suspend is disabled.\\nClick to enable.\", \"class\": \"disabled\"}';\nfi",
+        "return-type": "json",
+        "interval": 5,
+        "signal": 9,
+        "on-click": "uwsm-app -- \"$HOME/user_scripts/waybar/toggle_hypridle.sh\"",
+        "escape": true
     }
 }

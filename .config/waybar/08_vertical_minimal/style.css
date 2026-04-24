@@ -20,7 +20,12 @@ window#waybar {
 #group-stats,
 #pulseaudio,
 #battery,
-#custom-network {
+#custom-network,
+#custom-notification,
+#custom-updates,
+#backlight,
+#bluetooth,
+#custom-inhibit-suspend {
     background-color: @surface_container;
     color: @on_surface;
     border-radius: 100px;
@@ -98,13 +103,15 @@ window#waybar {
 }
 
 /* --- BOTTOM SECTION --- */
-#custom-network {
-    font-size: 10px;
-    padding: 8px 0;
-}
-
-#pulseaudio, #battery {
-    /* CHANGED: 10px guarantees '100' fits in 38px width */
+#custom-network,
+#pulseaudio, 
+#battery,
+#custom-notification,
+#custom-updates,
+#backlight,
+#bluetooth,
+#custom-inhibit-suspend {
+    /* CHANGED: 10px guarantees fits in 38px width */
     font-size: 10px; 
     padding: 8px 0;
 }
