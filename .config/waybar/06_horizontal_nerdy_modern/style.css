@@ -5,6 +5,45 @@
 
 @import url("../../.config/matugen/generated/waybar-colors.css");
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   TRANSLUCENCY CONTROLS (GLASSY MODE)
+   Tweak the decimals (0.0 to 1.0) here to adjust granular glassiness.
+   ───────────────────────────────────────────────────────────────────────────── */
+@define-color bg_tooltip              alpha(@surface_container_high, 0.85);
+@define-color bg_modules              alpha(@surface_container, 0.6);
+@define-color bg_hover_general        alpha(@surface_container_highest, 0.6);
+
+@define-color bg_primary_container    alpha(@primary_container, 0.7);
+@define-color bg_primary_solid        alpha(@primary, 0.9);
+
+@define-color bg_secondary_container  alpha(@secondary_container, 0.7);
+@define-color bg_tertiary_container   alpha(@tertiary_container, 0.7);
+@define-color bg_error_container      alpha(@error_container, 0.7);
+@define-color bg_error_solid          alpha(@error, 0.9);
+
+@define-color bg_surface_low          alpha(@surface_container_low, 0.6);
+@define-color bg_surface_highest      alpha(@surface_container_highest, 0.7);
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   TRANSPARENCY TOGGLE
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Remove this line to flip the master switch to OPAQUE
+
+@define-color bg_tooltip              @surface_container_high;
+@define-color bg_modules              @surface_container;
+@define-color bg_hover_general        @surface_container_highest;
+@define-color bg_primary_container    @primary_container;
+@define-color bg_primary_solid        @primary;
+@define-color bg_secondary_container  @secondary_container;
+@define-color bg_tertiary_container   @tertiary_container;
+@define-color bg_error_container      @error_container;
+@define-color bg_error_solid          @error;
+@define-color bg_surface_low          @surface_container_low;
+@define-color bg_surface_highest      @surface_container_highest;
+
+   Remove this line to flip the master switch to OPAQUE */
+
 * {
     font-family: "JetBrains Mono Nerd Font Propo", "JetBrainsMono Nerd Font", "JetBrains Mono NF", "JetBrains Mono", "Symbols Nerd Font", "Noto Sans", "DejaVu Sans", sans-serif;
     font-size: 13px;
@@ -27,7 +66,7 @@ window#waybar.hidden {
 }
 
 tooltip {
-    background-color: @surface_container_high;
+    background-color: @bg_tooltip;
     color: @on_surface;
     border: 2px solid @outline_variant;
     border-radius: 12px;
@@ -45,7 +84,7 @@ tooltip label {
 .modules-left,
 .modules-center,
 .modules-right {
-    background-color: @surface_container;
+    background-color: @bg_modules;
     border-radius: 12px;
     padding: 0 6px;
     margin: 2px 0;
@@ -119,7 +158,7 @@ tooltip label {
 #custom-updates-trigger:hover,
 #mpris:hover,
 #custom-mpris-trigger:hover {
-    background-color: @surface_container_highest;
+    background-color: @bg_hover_general;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -140,14 +179,14 @@ tooltip label {
 #custom-launcher {
     font-size: 16px;
     color: @primary;
-    background-color: @primary_container;
+    background-color: @bg_primary_container;
     border-radius: 10px;
     margin-left: 2px;
     margin-right: 2px;
 }
 
 #custom-launcher:hover {
-    background-color: @primary;
+    background-color: @bg_primary_solid;
     color: @on_primary;
 }
 
@@ -155,7 +194,7 @@ tooltip label {
    WORKSPACES
    ═══════════════════════════════════════════════════════════════════════════ */
 #workspaces {
-    background-color: @surface_container_low;
+    background-color: @bg_surface_low;
     padding: 0 4px;
     border-radius: 10px;
 }
@@ -173,23 +212,23 @@ tooltip label {
 }
 
 #workspaces button:hover {
-    background-color: @surface_container_highest;
+    background-color: @bg_surface_highest;
     color: @primary;
 }
 
 #workspaces button.active {
-    background-color: @primary;
+    background-color: @bg_primary_solid;
     color: @on_primary;
     font-weight: 700;
 }
 
 #workspaces button.urgent {
-    background-color: @error;
+    background-color: @bg_error_solid;
     color: @on_error;
 }
 
 #workspaces button.special {
-    background-color: @tertiary_container;
+    background-color: @bg_tertiary_container;
     color: @on_tertiary_container;
     font-size: 12px;
 }
@@ -203,7 +242,7 @@ tooltip label {
    SUBMAP & WINDOW & NET SPEED
    ═══════════════════════════════════════════════════════════════════════════ */
 #submap {
-    background-color: @tertiary_container;
+    background-color: @bg_tertiary_container;
     color: @on_tertiary_container;
     padding: 0 12px;
     border-radius: 8px;
@@ -248,7 +287,7 @@ tooltip label {
    CENTER SECTION
    ═══════════════════════════════════════════════════════════════════════════ */
 #clock {
-    background-color: @primary_container;
+    background-color: @bg_primary_container;
     color: @on_primary_container;
     font-size: 13px;
     font-weight: 700;
@@ -256,7 +295,7 @@ tooltip label {
 }
 
 #clock:hover {
-    background-color: @primary;
+    background-color: @bg_primary_solid;
     color: @on_primary;
 }
 
@@ -300,7 +339,7 @@ tooltip label {
 
 #cpu:hover {
     color: @on_tertiary_container;
-    background-color: @tertiary_container;
+    background-color: @bg_tertiary_container;
 }
 
 #memory {
@@ -309,7 +348,7 @@ tooltip label {
 
 #memory:hover {
     color: @on_secondary_container;
-    background-color: @secondary_container;
+    background-color: @bg_secondary_container;
 }
 
 #disk {
@@ -318,7 +357,7 @@ tooltip label {
 
 #disk:hover {
     color: @on_secondary_container;
-    background-color: @secondary_container;
+    background-color: @bg_secondary_container;
 }
 
 #temperature {
@@ -337,7 +376,7 @@ tooltip label {
 #disk.critical,
 #temperature.critical {
     color: @on_error;
-    background-color: @error;
+    background-color: @bg_error_solid;
     font-weight: 700;
 }
 
@@ -353,7 +392,7 @@ tooltip label {
 
 #backlight:hover {
     color: @on_tertiary_container;
-    background-color: @tertiary_container;
+    background-color: @bg_tertiary_container;
 }
 
 #network {
@@ -364,7 +403,7 @@ tooltip label {
 }
 
 #network:hover {
-    background-color: @primary_container;
+    background-color: @bg_primary_container;
     color: @on_primary_container;
 }
 
@@ -388,7 +427,7 @@ tooltip label {
 }
 
 #bluetooth:hover {
-    background-color: @secondary_container;
+    background-color: @bg_secondary_container;
     color: @on_secondary_container;
 }
 
@@ -410,7 +449,7 @@ tooltip label {
 }
 
 #pulseaudio:hover {
-    background-color: @tertiary_container;
+    background-color: @bg_tertiary_container;
     color: @on_tertiary_container;
 }
 
@@ -427,7 +466,7 @@ tooltip label {
 }
 
 #battery:hover {
-    background-color: @primary_container;
+    background-color: @bg_primary_container;
     color: @on_primary_container;
 }
 
@@ -439,7 +478,7 @@ tooltip label {
 
 #battery.charging:hover,
 #battery.plugged:hover {
-    background-color: @tertiary_container;
+    background-color: @bg_tertiary_container;
     color: @on_tertiary_container;
 }
 
@@ -450,7 +489,7 @@ tooltip label {
 
 #battery.critical {
     color: @on_error;
-    background-color: @error;
+    background-color: @bg_error_solid;
     font-weight: 700;
 }
 
@@ -464,7 +503,7 @@ tooltip label {
 }
 
 #custom-theme:hover {
-    background-color: @secondary_container;
+    background-color: @bg_secondary_container;
     color: @on_secondary_container;
 }
 
@@ -479,12 +518,12 @@ tooltip label {
 
 #custom-inhibit-suspend.disabled {
     color: @tertiary;
-    background-color: @tertiary_container;
+    background-color: @bg_tertiary_container;
     border-radius: 2px 8px;
 }
 
 #custom-inhibit-suspend:hover {
-    background-color: @surface_container_highest;
+    background-color: @bg_surface_highest;
 }
 
 #custom-notification {
@@ -494,7 +533,7 @@ tooltip label {
 }
 
 #custom-notification:hover {
-    background-color: @secondary_container;
+    background-color: @bg_secondary_container;
     color: @on_secondary_container;
 }
 
@@ -512,12 +551,12 @@ tooltip label {
 
 #tray > .needs-attention {
     -gtk-icon-effect: highlight;
-    background-color: @error_container;
+    background-color: @bg_error_container;
     border-radius: 8px;
 }
 
 #tray menu {
-    background-color: @surface_container_high;
+    background-color: @bg_tooltip;
     border: 2px solid @outline_variant;
     border-radius: 12px;
     padding: 8px;
@@ -530,7 +569,7 @@ tooltip label {
 }
 
 #tray menu menuitem:hover {
-    background-color: @surface_container_highest;
+    background-color: @bg_surface_highest;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -541,11 +580,11 @@ tooltip label {
     margin-right: 2px;
     margin-left: 3px;
     color: @error;
-    background-color: @error_container;
+    background-color: @bg_error_container;
     border-radius: 8px;
 }
 
 #custom-power:hover {
-    background-color: @error;
+    background-color: @bg_error_solid;
     color: @on_error;
 }
