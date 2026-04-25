@@ -50,8 +50,10 @@ if [[ "$(tty)" == "/dev/tty1" ]]; then
     echo "root:0000" | chpasswd
     echo -e "\e[1;32m[INFO]\e[0m Root password set to 0000. SSH is available."
 
-    echo -e "\e[1;34m[INFO]\e[0m Waiting for background services to initialize..."
-    systemctl is-system-running --wait >/dev/null 2>&1 || true
+    # Bypassing the 120s offline network deadlock by removing '--wait'. 
+    # Because this executes on tty1, multi-user.target is already achieved.
+    echo -e "\e[1;34m[INFO]\e[0m Bootstrapping environment..."
+    systemctl is-system-running >/dev/null 2>&1 || true
 
     chmod -R +x /root/arch_install/
 
@@ -97,6 +99,22 @@ echo "# --- DUSKY PERMISSIONS END ---" >> "${PROFILE_DIR}/profiledef.sh"
 
 
 # --- 5. DYNAMIC MKARCHISO PATCHING (The payload) ---
+
+# Prevent pacstrap from re-downloading packages already fetched by 010/020.
+# We inject your offline repo paths as authoritative CacheDirs. pacstrap will bind-mount 
+# these paths into the airootfs and hardlink them natively.
+echo "  -> Mapping offline repositories as pacman cache to prevent redownloads..."
+awk -v off="${OFFLINE_REPO_OFFICIAL}" -v aur="${OFFLINE_REPO_AUR}" '
+/^\[options\]/ {
+    print
+    print "CacheDir = " off
+    print "CacheDir = " aur
+    print "CacheDir = /var/cache/pacman/pkg"
+    next
+}
+{print}
+' "${PROFILE_DIR}/pacman.conf" > "${PROFILE_DIR}/pacman.conf.tmp" && mv "${PROFILE_DIR}/pacman.conf.tmp" "${PROFILE_DIR}/pacman.conf"
+
 echo "  -> Cloning official mkarchiso..."
 cp /usr/bin/mkarchiso "$MKARCHISO_CUSTOM"
 chmod +x "$MKARCHISO_CUSTOM"
