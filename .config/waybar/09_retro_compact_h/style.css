@@ -268,7 +268,7 @@ window#waybar > box {
 #workspaces {
   padding: 0px 0px 0px 0px;
   margin: 1px 6px;
-  background-color: @glass_bar;
+  background-color: transparent;
   border: none;
 }
 
