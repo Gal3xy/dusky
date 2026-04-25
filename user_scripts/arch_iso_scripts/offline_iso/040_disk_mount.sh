@@ -20,6 +20,12 @@ readonly SWAPFILE_SIZE_BYTES=4294967296
 readonly EFI_GPT_TYPE="c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
 readonly BTRFS_OPTS="rw,noatime,compress=zstd:3,space_cache=v2,discard=async"
 
+# --- Inter-module State ---
+readonly STATE_FILE="/tmp/arch_install_state.env"
+if [[ -f "$STATE_FILE" ]]; then
+    source "$STATE_FILE"
+fi
+
 MAPPED_ROOT=""
 SUCCESS=0
 EFI_PART=""
@@ -149,19 +155,25 @@ determine_root_partition() {
     else
         echo -e "${C_YELLOW}>> /dev/mapper/cryptroot not found. Assuming unencrypted root.${C_RESET}"
         if (( auto_mode == 1 )); then
-            local -a btrfs_parts=()
-            local part fstype
-            while read -r part fstype; do
-                [[ "$fstype" == "btrfs" ]] && btrfs_parts+=("$part")
-            done < <(lsblk -pnro NAME,FSTYPE 2>/dev/null || true)
-
-            if (( ${#btrfs_parts[@]} == 1 )); then
-                ROOT_PART=$(readlink -f "${btrfs_parts[0]}")
+            if [[ -n "${PROVISIONED_ROOT_PART:-}" && -b "$PROVISIONED_ROOT_PART" ]]; then
+                ROOT_PART=$(readlink -f "$PROVISIONED_ROOT_PART")
                 MAPPED_ROOT="$ROOT_PART"
-                echo -e "${C_CYAN}Auto-detected unencrypted BTRFS root: $ROOT_PART${C_RESET}"
+                echo -e "${C_CYAN}Auto-detected unencrypted BTRFS root (from previous module): $ROOT_PART${C_RESET}"
             else
-                echo -e "${C_RED}Critical: Could not auto-detect a unique unencrypted BTRFS root partition. Please run interactively.${C_RESET}"
-                exit 1
+                local -a btrfs_parts=()
+                local part fstype
+                while read -r part fstype; do
+                    [[ "$fstype" == "btrfs" ]] && btrfs_parts+=("$part")
+                done < <(lsblk -pnro NAME,FSTYPE 2>/dev/null || true)
+
+                if (( ${#btrfs_parts[@]} == 1 )); then
+                    ROOT_PART=$(readlink -f "${btrfs_parts[0]}")
+                    MAPPED_ROOT="$ROOT_PART"
+                    echo -e "${C_CYAN}Auto-detected unencrypted BTRFS root: $ROOT_PART${C_RESET}"
+                else
+                    echo -e "${C_RED}Critical: Could not auto-detect a unique unencrypted BTRFS root partition. Please run interactively.${C_RESET}"
+                    exit 1
+                fi
             fi
         else
             echo -e "${C_CYAN}Available block devices:${C_RESET}"
@@ -338,13 +350,18 @@ determine_efi_partition() {
     [[ "$BOOT_MODE" == "UEFI" ]] || return 0
 
     if (( auto_mode == 1 )); then
-        detected=$(auto_detect_efi_partition "$ROOT_DISK" || true)
-        if [[ -n "$detected" ]]; then
-            EFI_PART=$(readlink -f "$detected")
-            echo -e "${C_CYAN}Auto-detected EFI partition: $EFI_PART${C_RESET}"
+        if [[ -n "${PROVISIONED_EFI_PART:-}" && -b "$PROVISIONED_EFI_PART" ]]; then
+            EFI_PART=$(readlink -f "$PROVISIONED_EFI_PART")
+            echo -e "${C_CYAN}Auto-detected EFI partition (from previous module): $EFI_PART${C_RESET}"
         else
-            echo -e "${C_YELLOW}>> Unable to auto-detect a unique EFI partition. User input required.${C_RESET}"
-            prompt_for_efi_partition
+            detected=$(auto_detect_efi_partition "$ROOT_DISK" || true)
+            if [[ -n "$detected" ]]; then
+                EFI_PART=$(readlink -f "$detected")
+                echo -e "${C_CYAN}Auto-detected EFI partition: $EFI_PART${C_RESET}"
+            else
+                echo -e "${C_YELLOW}>> Unable to auto-detect a unique EFI partition. User input required.${C_RESET}"
+                prompt_for_efi_partition
+            fi
         fi
     else
         prompt_for_efi_partition

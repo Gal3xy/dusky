@@ -650,6 +650,16 @@ run_provisioning_wizard() {
         fi
     fi
 
+    # --- State Export for 040_disk_mount.sh ---
+    local state_file="/tmp/arch_install_state.env"
+    > "$state_file"
+    if [[ -n "${part_root:-}" ]]; then
+        echo "PROVISIONED_ROOT_PART=\"$part_root\"" >> "$state_file"
+    fi
+    if [[ -n "${part_boot:-}" ]]; then
+        echo "PROVISIONED_EFI_PART=\"$part_boot\"" >> "$state_file"
+    fi
+
     echo -e "${C_GREEN}>> Disk Provisioning Complete. Ready for architecture assembly.${C_RESET}"
 }
 

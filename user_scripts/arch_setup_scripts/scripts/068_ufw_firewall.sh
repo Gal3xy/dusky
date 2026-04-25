@@ -194,6 +194,7 @@ info "Applying UFW Rulesets..."
 ufw default deny incoming >/dev/null
 ufw default allow outgoing >/dev/null
 ufw allow "${SSH_PORT}/tcp" comment 'OpenSSH' >/dev/null
+ufw allow 41641/udp comment 'Tailscale Direct P2P' >/dev/null
 
 TRUSTED_IFACES=(
     "tailscale0" # Tailscale mesh
@@ -219,6 +220,12 @@ info "Activating UFW..."
 
 systemctl enable ufw.service >/dev/null 2>&1
 ufw --force enable >/dev/null
+
+# Fix: Restart Tailscale to re-inject netfilter chains wiped by UFW reload
+if systemctl is-active --quiet tailscaled.service 2>/dev/null; then
+    info "Restarting Tailscale to restore mesh netfilter state..."
+    systemctl restart tailscaled.service
+fi
 
 if ufw status | grep -q "Status: active"; then
     printf "\n%s======================================================%s\n" "$C_GREEN" "$C_RESET"
