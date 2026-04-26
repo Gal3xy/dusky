@@ -28,7 +28,6 @@ declare -ra CHROOT_SEQUENCE=(
   "125_mkinitcpio_hooks_disable.sh"
   "130_chroot_package_installer.sh --auto"
   "135_plymouth_setup.sh"
-  "140_mkinitcpio_generation.sh"
 # "150_limine_bootloader.sh --auto"
   "155_limine_setup.sh --auto"
   "156_snapper_isolation_subvolume.sh --auto"
