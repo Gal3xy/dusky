@@ -233,13 +233,14 @@ chmod 0644 "${THEME_DIR}"/*
 info "Setting default theme to ${THEME_NAME}..."
 plymouth-set-default-theme "$THEME_NAME"
 
-info "Patching mkinitcpio drop-in config to inject sd-plymouth..."
+info "Patching mkinitcpio drop-in config to inject plymouth hook..."
 if [[ -f "$MKINITCPIO_CONF" ]]; then
-    if ! grep -q "^[^#]*HOOKS=.*sd-plymouth" "$MKINITCPIO_CONF"; then
-        sed -i --follow-symlinks -E 's/^([^#]*HOOKS=\([^)]*systemd)([[:space:]]*)/\1 sd-plymouth /' "$MKINITCPIO_CONF"
-        info "Injected sd-plymouth hook into $MKINITCPIO_CONF"
+    # ARCH FIX: sd-plymouth is deprecated. The modern 'plymouth' hook automatically detects systemd environments.
+    if ! grep -q "^[^#]*HOOKS=.*plymouth" "$MKINITCPIO_CONF"; then
+        sed -i --follow-symlinks -E 's/^([^#]*HOOKS=\([^)]*systemd)([[:space:]]*)/\1 plymouth /' "$MKINITCPIO_CONF"
+        info "Injected modern plymouth hook into $MKINITCPIO_CONF"
     else
-        info "sd-plymouth hook already present or config is commented out."
+        info "plymouth hook already present or config is commented out."
     fi
 else
     warn "$MKINITCPIO_CONF not found. Ensure 120_mkintcpip_optimizer.sh is run before this script."
@@ -259,7 +260,6 @@ if [[ -f "$LIMINE_SCRIPT" ]]; then
         info "Silent boot parameters already present in Limine script."
     fi
 else
-    # The script will hit this if you do a manual test without copying 155_limine_setup.sh next to it
     warn "$LIMINE_SCRIPT not found. Kernel command line parameters were not updated."
 fi
 
