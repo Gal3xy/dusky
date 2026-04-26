@@ -523,6 +523,13 @@ if $_fzf_bin --zsh > /dev/null 2>&1; then
   fi
 fi
 
+
+# -- Zoxide----
+if command -v zoxide >/dev/null; then
+    eval "$(zoxide init zsh)"
+fi
+
+
 # --- Autosuggestions ---
 if [ -f /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh ]; then
     # Config MUST be set before sourcing
@@ -534,6 +541,8 @@ fi
 if [[ -f "/usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ]]; then
   source "/usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
 fi
+
+
 
 # Cleanup variables to keep environment clean
 unset _starship_cache _starship_bin _fzf_cache _fzf_bin
