@@ -1044,7 +1044,7 @@ pages:
       properties:
         title: Night Light
         description: Blue light filter slider
-        icon: weather-clear-night-symbolic
+        icon: preferences-color-symbolic
         button_text: "Open"
       on_press:
         type: exec
