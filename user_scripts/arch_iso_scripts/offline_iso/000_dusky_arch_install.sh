@@ -29,6 +29,7 @@ declare -ra CHROOT_SEQUENCE=(
   "110_post_chroot.sh --auto"
   "115_tty_autologin.sh --auto"
   "120_mkintcpip_optimizer.sh | IGNORE"
+  "135_plymouth_setup.sh"
   "130_chroot_package_installer.sh --auto"
   "131_chroot_aur_packages.sh --auto"
   "140_mkinitcpio_generation.sh"
